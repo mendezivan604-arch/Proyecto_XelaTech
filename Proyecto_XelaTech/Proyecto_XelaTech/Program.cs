@@ -246,6 +246,244 @@ namespace Proyecto_XelaTech
             return "Tecnico";
         }
     }
+    public abstract class Equipo
+    {
+        protected string codigo;
+        protected string numeroSerie;
+        protected string marca;
+        protected string modelo;
+        protected Cliente propietario;
+        protected string estadoFisico;
+        protected List<string> accesorios;
+
+        public string Codigo
+        {
+            get { return codigo; }
+        }
+
+        public string NumeroSerie
+        {
+            get { return numeroSerie; }
+        }
+
+        public string Marca
+        {
+            get { return marca; }
+
+            set
+            {
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    marca = value.Trim();
+                }
+                else
+                {
+                    throw new ArgumentException("La marca no puede estar vacía.");
+                }
+            }
+        }
+
+        public string Modelo
+        {
+            get { return modelo; }
+
+            set
+            {
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    modelo = value.Trim();
+                }
+                else
+                {
+                    throw new ArgumentException("El modelo no puede estar vacío.");
+                }
+            }
+        }
+
+        public Cliente Propietario
+        {
+            get { return propietario; }
+        }
+
+        public string EstadoFisico
+        {
+            get { return estadoFisico; }
+        }
+
+        public List<string> Accesorios
+        {
+            get { return new List<string>(accesorios); }
+        }
+
+        public abstract string Tipo
+        {
+            get;
+        }
+
+        protected Equipo(string codigo, string numeroSerie, string marca, string modelo, Cliente propietario, string estadoFisico, List<string> accesorios)
+        {
+            if (string.IsNullOrWhiteSpace(codigo))
+            {
+                throw new ArgumentException("El código del equipo es obligatorio.");
+            }
+
+            if (string.IsNullOrWhiteSpace(numeroSerie))
+            {
+                throw new ArgumentException("El número de serie es obligatorio.");
+            }
+
+            if (propietario == null)
+            {
+                throw new ArgumentException("El equipo debe tener un propietario.");
+            }
+
+            this.codigo = codigo.Trim();
+            this.numeroSerie = numeroSerie.Trim();
+            this.propietario = propietario;
+
+            Marca = marca;
+            Modelo = modelo;
+
+            ActualizarRecepcion(estadoFisico, accesorios);
+        }
+
+        public void ActualizarRecepcion(string estado, List<string> accesorios)
+        {
+            if (string.IsNullOrWhiteSpace(estado))
+            {
+                throw new ArgumentException("Debe indicar el estado físico del equipo.");
+            }
+
+            if (accesorios == null)
+            {
+                throw new ArgumentException("Debe proporcionar una lista de accesorios.");
+            }
+
+            List<string> accesoriosValidados = new List<string>();
+
+            foreach (string accesorio in accesorios)
+            {
+                if (string.IsNullOrWhiteSpace(accesorio))
+                {
+                    throw new ArgumentException("El nombre de un accesorio no puede estar vacío.");
+                }
+
+                accesoriosValidados.Add(accesorio.Trim());
+            }
+
+            estadoFisico = estado.Trim();
+            this.accesorios = accesoriosValidados;
+        }
+
+        public abstract string ObtenerGuiaDiagnostico();
+    }
+    public class Portatil : Equipo
+    {
+        public bool IncluyeCargador
+        {
+            get { return TieneCargador(); }
+        }
+
+        public override string Tipo
+        {
+            get { return "Portatil"; }
+        }
+
+        public Portatil(string codigo, string numeroSerie, string marca, string modelo, Cliente propietario, string estadoFisico, List<string> accesorios) : base(codigo, numeroSerie, marca, modelo, propietario, estadoFisico, accesorios)
+        {
+            
+        }
+
+        private bool TieneCargador()
+        {
+            foreach (string accesorio in accesorios)
+            {
+                if (accesorio.ToUpper() == "CARGADOR")
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public override string ObtenerGuiaDiagnostico()
+        {
+            return "Revisar encendido, batería, cargador, pantalla y teclado.";
+        }
+    }
+    public class Escritorio : Equipo
+    {
+        private string formatoGabinete;
+
+        public string FormatoGabinete
+        {
+            get { return formatoGabinete; }
+
+            set
+            {
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    formatoGabinete = value.Trim();
+                }
+                else
+                {
+                    throw new ArgumentException("El formato del gabinete es obligatorio.");
+                }
+            }
+        }
+
+        public override string Tipo
+        {
+            get { return "Escritorio"; }
+        }
+
+        public Escritorio(string codigo, string numeroSerie, string marca, string modelo, Cliente propietario, string estadoFisico, List<string> accesorios, string formatoGabinete) : base(codigo, numeroSerie, marca, modelo, propietario, estadoFisico, accesorios)
+        {
+            FormatoGabinete = formatoGabinete;
+        }
+
+        public override string ObtenerGuiaDiagnostico()
+        {
+            return "Revisar fuente de poder, memoria RAM, disco y ventilación.";
+        }
+    }
+    public class Impresora : Equipo
+    {
+        private string tecnologia;
+
+        public string Tecnologia
+        {
+            get { return tecnologia; }
+
+            set
+            {
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    tecnologia = value.Trim();
+                }
+                else
+                {
+                    throw new ArgumentException("La tecnología de impresión es obligatoria.");
+                }
+            }
+        }
+
+        public override string Tipo
+        {
+            get { return "Impresora"; }
+        }
+
+        public Impresora(string codigo, string numeroSerie, string marca, string modelo, Cliente propietario, string estadoFisico, List<string> accesorios, string tecnologia) : base(codigo, numeroSerie, marca, modelo, propietario, estadoFisico, accesorios)
+        {
+            Tecnologia = tecnologia;
+        }
+
+        public override string ObtenerGuiaDiagnostico()
+        {
+            return "Revisar alimentación de papel, tinta o tóner y calidad de impresión.";
+        }
+    }
     internal class Program
     {
         static void Main(string[] args)
