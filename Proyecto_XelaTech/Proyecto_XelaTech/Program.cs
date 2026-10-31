@@ -151,6 +151,101 @@ namespace Proyecto_XelaTech
             return "Cliente";
         }
     }
+    public class Tecnico : Persona
+    {
+        private string especialidad;
+        private bool habilitado;
+        private int limiteActivos;
+        private int[] calificaciones;
+
+        public string Especialidad
+        {
+            get { return especialidad; }
+
+            set
+            {
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    throw new ArgumentException("La especialidad no puede estar vacía.");
+                }
+
+                string especialidadIngresada = value.Trim();
+
+                if (especialidadIngresada == "Portatil" || especialidadIngresada == "Escritorio" || especialidadIngresada == "Impresora")
+                {
+                    especialidad = especialidadIngresada;
+                }
+                else
+                {
+                    throw new ArgumentException("La especialidad debe ser Portatil, Escritorio o Impresora.");
+                }
+            }
+        }
+
+        public bool Habilitado
+        {
+            get { return habilitado; }
+            set { habilitado = value; }
+        }
+
+        public int LimiteActivos
+        {
+            get { return limiteActivos; }
+        }
+
+        public decimal? PromedioCalificacion
+        {
+            get { return CalcularPromedio(); }
+        }
+
+        public Tecnico(string codigo, string nombreCompleto, string especialidad) : base(codigo, nombreCompleto)
+        {
+            Especialidad = especialidad;
+            Habilitado = true;
+            limiteActivos = 3;
+
+            calificaciones = new int[5];
+        }
+
+        public void RegistrarCalificacion(int valor)
+        {
+            if (valor >= 1 && valor <= 5)
+            {
+                calificaciones[valor - 1]++;
+            }
+            else
+            {
+                throw new ArgumentException("La calificación debe estar entre 1 y 5.");
+            }
+        }
+
+        public decimal? CalcularPromedio()
+        {
+            int cantidadCalificaciones = 0;
+            int sumaPuntos = 0;
+
+            for (int i = 0; i < calificaciones.Length; i++)
+            {
+                cantidadCalificaciones = cantidadCalificaciones + calificaciones[i];
+
+                sumaPuntos = sumaPuntos + calificaciones[i] * (i + 1);
+            }
+
+            if (cantidadCalificaciones == 0)
+            {
+                return null;
+            }
+            else
+            {
+                return (decimal)sumaPuntos / cantidadCalificaciones;
+            }
+        }
+
+        public override string ObtenerRol()
+        {
+            return "Tecnico";
+        }
+    }
     internal class Program
     {
         static void Main(string[] args)
