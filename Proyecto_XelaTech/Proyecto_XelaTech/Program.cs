@@ -484,6 +484,102 @@ namespace Proyecto_XelaTech
             return "Revisar alimentación de papel, tinta o tóner y calidad de impresión.";
         }
     }
+    public class DatosSistema
+    {
+        private List<Cliente> clientes;
+        private int[] secuencias;
+
+        public List<Cliente> Clientes
+        {
+            get { return clientes; }
+        }
+
+        public DatosSistema()
+        {
+            clientes = new List<Cliente>();
+            secuencias = new int[9];
+        }
+
+        public string GenerarCodigo(string prefijo)
+        {
+            int posicion;
+
+            switch (prefijo)
+            {
+                case "CLI":
+                    posicion = 0;
+                    break;
+
+                case "TEC":
+                    posicion = 1;
+                    break;
+
+                case "EQU":
+                    posicion = 2;
+                    break;
+
+                case "SOL":
+                    posicion = 3;
+                    break;
+
+                case "REP":
+                    posicion = 4;
+                    break;
+
+                case "DIA":
+                    posicion = 5;
+                    break;
+
+                case "ACC":
+                    posicion = 6;
+                    break;
+
+                case "DET":
+                    posicion = 7;
+                    break;
+
+                case "CAM":
+                    posicion = 8;
+                    break;
+
+                default:
+                    throw new ArgumentException("El prefijo del código no es válido.");
+            }
+
+            secuencias[posicion]++;
+
+            string codigoGenerado = prefijo + secuencias[posicion].ToString("D3");
+
+            while (ExisteCodigo(codigoGenerado))
+            {
+                secuencias[posicion]++;
+
+                codigoGenerado = prefijo + secuencias[posicion].ToString("D3");
+            }
+
+            return codigoGenerado;
+        }
+
+        public bool ExisteCodigo(string codigo)
+        {
+            if (string.IsNullOrWhiteSpace(codigo))
+            {
+                throw new ArgumentException("Debe proporcionar un código.");
+            }
+
+            string codigoBuscado = codigo.Trim().ToUpper();
+
+            foreach (Cliente cliente in clientes)
+            {
+                if (cliente.Codigo.ToUpper() == codigoBuscado)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
     internal class Program
     {
         static void Main(string[] args)
