@@ -614,11 +614,228 @@ namespace Proyecto_XelaTech
             datos.Clientes.Add(cliente);
         }
     }
+    public class MenuConsola
+    {
+        private DatosSistema datos;
+        private GestorAtencion gestor;
+
+        public MenuConsola(DatosSistema datos, GestorAtencion gestor)
+        {
+            if (datos == null || gestor == null)
+            {
+                throw new ArgumentException("El menú necesita los datos y el gestor.");
+            }
+
+            this.datos = datos;
+            this.gestor = gestor;
+        }
+
+        public void Ejecutar()
+        {
+            int opcion;
+
+            do
+            {
+                Console.Clear();
+                Console.WriteLine("================================");
+                Console.WriteLine("        XELATECH SOPORTE");
+                Console.WriteLine("================================");
+                Console.WriteLine("1. Gestión de clientes");
+                Console.WriteLine("0. Salir");
+
+                opcion = LeerEntero("Seleccione una opción: ", 0, 1);
+
+                switch (opcion)
+                {
+                    case 1:
+                        MenuClientes();
+                        break;
+
+                    case 0:
+                        Console.WriteLine("Saliendo del programa...");
+                        break;
+                }
+
+            } while (opcion != 0);
+        }
+
+        private void MenuClientes()
+        {
+            int opcion;
+
+            do
+            {
+                Console.Clear();
+                Console.WriteLine("================================");
+                Console.WriteLine("        GESTIÓN DE CLIENTES");
+                Console.WriteLine("================================");
+                Console.WriteLine("1. Registrar cliente");
+                Console.WriteLine("2. Mostrar clientes");
+                Console.WriteLine("0. Volver al menú principal");
+
+                opcion = LeerEntero("Seleccione una opción: ", 0, 2);
+
+                try
+                {
+                    switch (opcion)
+                    {
+                        case 1:
+                            RegistrarCliente();
+                            break;
+
+                        case 2:
+                            MostrarClientes();
+                            break;
+                    }
+                }
+                catch (ArgumentException error)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("Error: " + error.Message);
+                }
+
+                if (opcion != 0)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("Presione una tecla para continuar...");
+                    Console.ReadKey();
+                }
+
+            } while (opcion != 0);
+        }
+
+        private void RegistrarCliente()
+        {
+            Console.Clear();
+            Console.WriteLine("REGISTRAR CLIENTE");
+            Console.WriteLine();
+
+            string nombre = LeerTexto("Nombre completo: ");
+            string telefono = LeerTexto("Teléfono: ");
+            string correo = LeerTexto("Correo: ");
+
+            Console.WriteLine();
+            Console.WriteLine("Tipo de cliente:");
+            Console.WriteLine("1. Estudiante");
+            Console.WriteLine("2. Profesional");
+            Console.WriteLine("3. Negocio");
+            Console.WriteLine("4. Institucion");
+
+            int opcionTipo = LeerEntero("Seleccione el tipo: ", 1, 4);
+
+            string tipo;
+
+            switch (opcionTipo)
+            {
+                case 1:
+                    tipo = "Estudiante";
+                    break;
+
+                case 2:
+                    tipo = "Profesional";
+                    break;
+
+                case 3:
+                    tipo = "Negocio";
+                    break;
+
+                default:
+                    tipo = "Institucion";
+                    break;
+            }
+
+            string codigo = datos.GenerarCodigo("CLI");
+
+            Cliente cliente = new Cliente(codigo, nombre, telefono, correo, tipo);
+
+            gestor.RegistrarCliente(cliente);
+
+            Console.WriteLine();
+            Console.WriteLine("Cliente registrado correctamente.");
+            Console.WriteLine("Código asignado: " + cliente.Codigo);
+        }
+
+        private void MostrarClientes()
+        {
+            Console.Clear();
+            Console.WriteLine("CLIENTES REGISTRADOS");
+            Console.WriteLine();
+
+            if (datos.Clientes.Count == 0)
+            {
+                Console.WriteLine("Todavía no hay clientes registrados.");
+                return;
+            }
+
+            foreach (Cliente cliente in datos.Clientes)
+            {
+                Console.WriteLine("Código: " + cliente.Codigo);
+                Console.WriteLine("Nombre: " + cliente.NombreCompleto);
+                Console.WriteLine("Teléfono: " + cliente.Telefono);
+                Console.WriteLine("Correo: " + cliente.Correo);
+                Console.WriteLine("Tipo: " + cliente.Tipo);
+                Console.WriteLine("--------------------------------");
+            }
+
+            Console.WriteLine("Total de clientes: " + datos.Clientes.Count);
+        }
+
+        private int LeerEntero(string mensaje, int minimo, int maximo)
+        {
+            int valor;
+            bool esValido;
+
+            do
+            {
+                Console.Write(mensaje);
+                string entrada = Console.ReadLine();
+
+                esValido = int.TryParse(entrada, out valor);
+
+                if (!esValido)
+                {
+                    Console.WriteLine("Debe ingresar un número entero.");
+                }
+                else if (valor < minimo || valor > maximo)
+                {
+                    Console.WriteLine("Ingrese un número entre " + minimo + " y " + maximo + ".");
+
+                    esValido = false;
+                }
+
+            } while (!esValido);
+
+            return valor;
+        }
+
+        private string LeerTexto(string mensaje)
+        {
+            string texto;
+
+            do
+            {
+                Console.Write(mensaje);
+                texto = Console.ReadLine();
+
+                if (string.IsNullOrWhiteSpace(texto))
+                {
+                    Console.WriteLine("Este dato no puede estar vacío.");
+                }
+
+            } while (string.IsNullOrWhiteSpace(texto));
+
+            return texto.Trim();
+        }
+    }
     internal class Program
     {
         static void Main(string[] args)
         {
-            
+            DatosSistema datos = new DatosSistema();
+            GestorAtencion gestor = new GestorAtencion(datos);
+            MenuConsola menu = new MenuConsola(datos, gestor);
+
+            menu.Ejecutar();
         }
     }
 }
