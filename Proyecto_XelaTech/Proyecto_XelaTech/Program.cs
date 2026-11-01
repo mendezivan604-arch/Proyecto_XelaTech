@@ -580,11 +580,45 @@ namespace Proyecto_XelaTech
             return false;
         }
     }
+    public class GestorAtencion
+    {
+        private DatosSistema datos;
+
+        public GestorAtencion(DatosSistema datos)
+        {
+            if (datos == null)
+            {
+                throw new ArgumentException("Debe proporcionar los datos del sistema.");
+            }
+
+            this.datos = datos;
+        }
+
+        public void RegistrarCliente(Cliente cliente)
+        {
+            if (cliente == null)
+            {
+                throw new ArgumentException("Debe proporcionar un cliente.");
+            }
+
+            if (!cliente.ValidarDatosBasicos())
+            {
+                throw new ArgumentException("El cliente tiene datos básicos incompletos.");
+            }
+
+            if (datos.ExisteCodigo(cliente.Codigo))
+            {
+                throw new ArgumentException("Ya existe un registro con ese código.");
+            }
+
+            datos.Clientes.Add(cliente);
+        }
+    }
     internal class Program
     {
         static void Main(string[] args)
         {
-
+            
         }
     }
 }
