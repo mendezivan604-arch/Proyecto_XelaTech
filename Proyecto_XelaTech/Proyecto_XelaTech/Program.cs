@@ -688,6 +688,49 @@ namespace Proyecto_XelaTech
 
             datos.Tecnicos.Add(tecnico);
         }
+        public Tecnico BuscarTecnicoPorCodigo(string codigo)
+        {
+            if (string.IsNullOrWhiteSpace(codigo))
+            {
+                throw new ArgumentException("Debe proporcionar el código del técnico.");
+            }
+
+            string codigoBuscado = codigo.Trim().ToUpper();
+
+            foreach (Tecnico tecnico in datos.Tecnicos)
+            {
+                if (tecnico.Codigo.ToUpper() == codigoBuscado)
+                {
+                    return tecnico;
+                }
+            }
+
+            return null;
+        }
+
+        public void HabilitarTecnico(string codigo, bool habilitado)
+        {
+            Tecnico tecnico = BuscarTecnicoPorCodigo(codigo);
+
+            if (tecnico == null)
+            {
+                throw new ArgumentException("No existe un técnico con ese código.");
+            }
+
+            tecnico.Habilitado = habilitado;
+        }
+
+        public void ActualizarNombreTecnico(string codigo, string nombre)
+        {
+            Tecnico tecnico = BuscarTecnicoPorCodigo(codigo);
+
+            if (tecnico == null)
+            {
+                throw new ArgumentException("No existe un técnico con ese código.");
+            }
+
+            tecnico.ActualizarNombre(nombre);
+        }
     }
     public class MenuConsola
     {
