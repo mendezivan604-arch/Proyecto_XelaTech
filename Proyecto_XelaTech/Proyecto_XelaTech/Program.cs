@@ -308,6 +308,18 @@ namespace Proyecto_XelaTech
         public string EstadoFisico
         {
             get { return estadoFisico; }
+
+            set
+            {
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    estadoFisico = value.Trim();
+                }
+                else
+                {
+                    throw new ArgumentException("El estado físico no puede estar vacío.");
+                }
+            }
         }
 
         public List<string> Accesorios
@@ -371,7 +383,7 @@ namespace Proyecto_XelaTech
                 accesoriosValidados.Add(accesorio.Trim());
             }
 
-            estadoFisico = estado.Trim();
+            EstadoFisico = estado;
             this.accesorios = accesoriosValidados;
         }
 
@@ -487,16 +499,21 @@ namespace Proyecto_XelaTech
     public class DatosSistema
     {
         private List<Cliente> clientes;
+        private List<Tecnico> tecnicos;
         private int[] secuencias;
 
         public List<Cliente> Clientes
         {
             get { return clientes; }
         }
-
+        public List<Tecnico> Tecnicos
+        {
+            get { return tecnicos; }
+        }
         public DatosSistema()
         {
             clientes = new List<Cliente>();
+            tecnicos = new List<Tecnico>();
             secuencias = new int[9];
         }
 
@@ -577,6 +594,14 @@ namespace Proyecto_XelaTech
                 }
             }
 
+            foreach (Tecnico tecnico in tecnicos)
+            {
+                if (tecnico.Codigo.ToUpper() == codigoBuscado)
+                {
+                    return true;
+                }
+            }
+
             return false;
         }
     }
@@ -613,6 +638,56 @@ namespace Proyecto_XelaTech
 
             datos.Clientes.Add(cliente);
         }
+        public Cliente BuscarClientePorCodigo(string codigo)
+        {
+            if (string.IsNullOrWhiteSpace(codigo))
+            {
+                throw new ArgumentException("Debe proporcionar el código del cliente.");
+            }
+
+            string codigoBuscado = codigo.Trim().ToUpper();
+
+            foreach (Cliente cliente in datos.Clientes)
+            {
+                if (cliente.Codigo.ToUpper() == codigoBuscado)
+                {
+                    return cliente;
+                }
+            }
+
+            return null;
+        }
+        public void ActualizarCliente(string codigo, string nombre, string telefono, string correo, string tipo)
+        {
+            Cliente cliente = BuscarClientePorCodigo(codigo);
+
+            if (cliente == null)
+            {
+                throw new ArgumentException("No existe un cliente con ese código.");
+            }
+
+            cliente.ActualizarDatos(nombre, telefono, correo, tipo);
+        }
+
+        public void RegistrarTecnico(Tecnico tecnico)
+        {
+            if (tecnico == null)
+            {
+                throw new ArgumentException("Debe proporcionar un técnico.");
+            }
+
+            if (!tecnico.ValidarDatosBasicos())
+            {
+                throw new ArgumentException("El técnico tiene datos básicos incompletos.");
+            }
+
+            if (datos.ExisteCodigo(tecnico.Codigo))
+            {
+                throw new ArgumentException("Ya existe un registro con ese código.");
+            }
+
+            datos.Tecnicos.Add(tecnico);
+        }
     }
     public class MenuConsola
     {
@@ -641,16 +716,19 @@ namespace Proyecto_XelaTech
                 Console.WriteLine("        XELATECH SOPORTE");
                 Console.WriteLine("================================");
                 Console.WriteLine("1. Gestión de clientes");
+                Console.WriteLine("2. Gestión de técnicos");
                 Console.WriteLine("0. Salir");
 
-                opcion = LeerEntero("Seleccione una opción: ", 0, 1);
+                opcion = LeerEntero("Seleccione una opción: ", 0, 2);
 
                 switch (opcion)
                 {
                     case 1:
                         MenuClientes();
                         break;
-
+                    case 2:
+                        MenuTecnicos();
+                        break;
                     case 0:
                         Console.WriteLine("Saliendo del programa...");
                         break;
@@ -671,9 +749,10 @@ namespace Proyecto_XelaTech
                 Console.WriteLine("================================");
                 Console.WriteLine("1. Registrar cliente");
                 Console.WriteLine("2. Mostrar clientes");
+                Console.WriteLine("3. Actualizar cliente");
                 Console.WriteLine("0. Volver al menú principal");
 
-                opcion = LeerEntero("Seleccione una opción: ", 0, 2);
+                opcion = LeerEntero("Seleccione una opción: ", 0, 3);
 
                 try
                 {
@@ -685,6 +764,9 @@ namespace Proyecto_XelaTech
 
                         case 2:
                             MostrarClientes();
+                            break;
+                        case 3:
+                            ActualizarCliente();
                             break;
                     }
                 }
@@ -780,6 +862,215 @@ namespace Proyecto_XelaTech
             Console.WriteLine("Total de clientes: " + datos.Clientes.Count);
         }
 
+        private void ActualizarCliente()
+        {
+            Console.Clear();
+            Console.WriteLine("ACTUALIZAR CLIENTE");
+            Console.WriteLine();
+
+            if (datos.Clientes.Count == 0)
+            {
+                Console.WriteLine("Todavía no hay clientes registrados.");
+                return;
+            }
+
+            string codigo = LeerTexto("Código del cliente: ");
+
+            Cliente cliente = gestor.BuscarClientePorCodigo(codigo);
+
+            if (cliente == null)
+            {
+                Console.WriteLine("No existe un cliente con ese código.");
+                return;
+            }
+
+            Console.WriteLine();
+            Console.WriteLine("Datos actuales:");
+            Console.WriteLine("Nombre: " + cliente.NombreCompleto);
+            Console.WriteLine("Teléfono: " + cliente.Telefono);
+            Console.WriteLine("Correo: " + cliente.Correo);
+            Console.WriteLine("Tipo: " + cliente.Tipo);
+            Console.WriteLine();
+
+            Console.WriteLine("Ingrese los datos que desea guardar.");
+            Console.WriteLine("Si un dato no cambia, escriba su valor actual.");
+            Console.WriteLine();
+
+            string nombre = LeerTexto("Nombre completo: ");
+            string telefono = LeerTexto("Teléfono: ");
+            string correo = LeerTexto("Correo: ");
+
+            Console.WriteLine();
+            Console.WriteLine("Tipo de cliente:");
+            Console.WriteLine("1. Estudiante");
+            Console.WriteLine("2. Profesional");
+            Console.WriteLine("3. Negocio");
+            Console.WriteLine("4. Institucion");
+
+            int opcionTipo = LeerEntero("Seleccione el tipo: ", 1, 4);
+
+            string tipo;
+
+            switch (opcionTipo)
+            {
+                case 1:
+                    tipo = "Estudiante";
+                    break;
+
+                case 2:
+                    tipo = "Profesional";
+                    break;
+
+                case 3:
+                    tipo = "Negocio";
+                    break;
+
+                default:
+                    tipo = "Institucion";
+                    break;
+            }
+
+            gestor.ActualizarCliente(
+                cliente.Codigo,
+                nombre,
+                telefono,
+                correo,
+                tipo
+            );
+
+            Console.WriteLine();
+            Console.WriteLine("Cliente actualizado correctamente.");
+        }
+        private void MenuTecnicos()
+        {
+            int opcion;
+
+            do
+            {
+                Console.Clear();
+                Console.WriteLine("================================");
+                Console.WriteLine("        GESTIÓN DE TÉCNICOS");
+                Console.WriteLine("================================");
+                Console.WriteLine("1. Registrar técnico");
+                Console.WriteLine("2. Mostrar técnicos");
+                Console.WriteLine("0. Volver al menú principal");
+
+                opcion = LeerEntero("Seleccione una opción: ", 0, 2);
+
+                try
+                {
+                    switch (opcion)
+                    {
+                        case 1:
+                            RegistrarTecnico();
+                            break;
+
+                        case 2:
+                            MostrarTecnicos();
+                            break;
+                    }
+                }
+                catch (ArgumentException error)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("Error: " + error.Message);
+                }
+
+                if (opcion != 0)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("Presione una tecla para continuar...");
+                    Console.ReadKey();
+                }
+
+            } while (opcion != 0);
+        }
+        private void RegistrarTecnico()
+        {
+            Console.Clear();
+            Console.WriteLine("REGISTRAR TÉCNICO");
+            Console.WriteLine();
+
+            string nombre = LeerTexto("Nombre completo: ");
+
+            Console.WriteLine();
+            Console.WriteLine("Especialidad:");
+            Console.WriteLine("1. Portatil");
+            Console.WriteLine("2. Escritorio");
+            Console.WriteLine("3. Impresora");
+
+            int opcionEspecialidad = LeerEntero("Seleccione la especialidad: ", 1, 3);
+
+            string especialidad;
+
+            switch (opcionEspecialidad)
+            {
+                case 1:
+                    especialidad = "Portatil";
+                    break;
+
+                case 2:
+                    especialidad = "Escritorio";
+                    break;
+
+                default:
+                    especialidad = "Impresora";
+                    break;
+            }
+
+            string codigo = datos.GenerarCodigo("TEC");
+
+            Tecnico tecnico = new Tecnico(codigo, nombre, especialidad);
+
+            gestor.RegistrarTecnico(tecnico);
+
+            Console.WriteLine();
+            Console.WriteLine("Técnico registrado correctamente.");
+            Console.WriteLine("Código asignado: " + tecnico.Codigo);
+        }
+        private void MostrarTecnicos()
+        {
+            Console.Clear();
+            Console.WriteLine("TÉCNICOS REGISTRADOS");
+            Console.WriteLine();
+
+            if (datos.Tecnicos.Count == 0)
+            {
+                Console.WriteLine("Todavía no hay técnicos registrados.");
+                return;
+            }
+
+            foreach (Tecnico tecnico in datos.Tecnicos)
+            {
+                Console.WriteLine("Código: " + tecnico.Codigo);
+                Console.WriteLine("Nombre: " + tecnico.NombreCompleto);
+                Console.WriteLine("Especialidad: " + tecnico.Especialidad);
+
+                if (tecnico.Habilitado)
+                {
+                    Console.WriteLine("Habilitado: Sí");
+                }
+                else
+                {
+                    Console.WriteLine("Habilitado: No");
+                }
+
+                Console.WriteLine("Límite de trabajos activos: " + tecnico.LimiteActivos);
+
+                if (tecnico.PromedioCalificacion == null)
+                {
+                    Console.WriteLine("Promedio: Sin calificaciones");
+                }
+                else
+                {
+                    Console.WriteLine("Promedio: " + tecnico.PromedioCalificacion);
+                }
+
+                Console.WriteLine("--------------------------------");
+            }
+
+            Console.WriteLine("Total de técnicos: " + datos.Tecnicos.Count);
+        }
         private int LeerEntero(string mensaje, int minimo, int maximo)
         {
             int valor;
