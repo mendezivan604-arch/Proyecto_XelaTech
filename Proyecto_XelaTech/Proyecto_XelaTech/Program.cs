@@ -245,6 +245,21 @@ namespace Proyecto_XelaTech
         {
             return "Tecnico";
         }
+        public int CalcularCarga(List<SolicitudServicio> solicitudes)
+        {
+            int cantidad = 0;
+
+            foreach (SolicitudServicio solicitud in solicitudes)
+            {
+                if (solicitud.TecnicoAsignado == this &&
+                    solicitud.EsActiva())
+                {
+                    cantidad++;
+                }
+            }
+
+            return cantidad;
+        }
     }
     public abstract class Equipo
     {
@@ -686,6 +701,7 @@ namespace Proyecto_XelaTech
         private List<Tecnico> tecnicos;
         private List<Equipo> equipos;
         private List<Repuesto> repuestos;
+        private List<SolicitudServicio> solicitudes;
         private int[] secuencias;
 
         public List<Cliente> Clientes
@@ -700,10 +716,13 @@ namespace Proyecto_XelaTech
         {
             get { return equipos; }
         }
-
         public List<Repuesto> Repuestos
         {
             get { return repuestos; }
+        }
+        public List<SolicitudServicio> Solicitudes
+        {
+            get { return solicitudes; }
         }
         public DatosSistema()
         {
@@ -711,7 +730,7 @@ namespace Proyecto_XelaTech
             tecnicos = new List<Tecnico>();
             equipos = new List<Equipo>();
             repuestos = new List<Repuesto>();
-
+            solicitudes = new List<SolicitudServicio>();
             secuencias = new int[9];
         }
 
@@ -814,12 +833,22 @@ namespace Proyecto_XelaTech
                     return true;
                 }
             }
+
+            foreach (SolicitudServicio solicitud in solicitudes)
+            {
+                if (solicitud.Codigo.ToUpper() == codigoBuscado)
+                {
+                    return true;
+                }
+            }
             return false;
         }
     }
     public class GestorAtencion
     {
         private DatosSistema datos;
+        private Queue<SolicitudServicio> colaUrgente;
+        private Queue<SolicitudServicio> colaNormal;
 
         public GestorAtencion(DatosSistema datos)
         {
@@ -829,6 +858,8 @@ namespace Proyecto_XelaTech
             }
 
             this.datos = datos;
+            colaUrgente = new Queue<SolicitudServicio>();
+            colaNormal = new Queue<SolicitudServicio>();
         }
 
         public void RegistrarCliente(Cliente cliente)
@@ -1068,6 +1099,117 @@ namespace Proyecto_XelaTech
 
             repuesto.ActualizarDatos(nombre, categoria, minimo, costo, precio);
         }
+        public SolicitudServicio CrearSolicitud(string codigoCliente, string codigoEquipo, string problema, string prioridad)
+        {
+            Cliente cliente = BuscarClientePorCodigo(codigoCliente);
+            Equipo equipo = BuscarEquipoPorCodigo(codigoEquipo);
+
+            if (cliente == null || equipo == null)
+            {
+                throw new ArgumentException("El cliente y el equipo deben estar registrados.");
+            }
+
+            if (equipo.Propietario != cliente)
+            {
+                throw new ArgumentException("El equipo no pertenece al cliente indicado.");
+            }
+
+            if (string.IsNullOrWhiteSpace(problema))
+            {
+                throw new ArgumentException("Debe describir el problema.");
+            }
+
+            if (prioridad != "Normal" && prioridad != "Urgente")
+            {
+                throw new ArgumentException("La prioridad no es válida.");
+            }
+
+            foreach (SolicitudServicio registrada in datos.Solicitudes)
+            {
+                if (registrada.Equipo == equipo && registrada.EsActiva())
+                {
+                    throw new ArgumentException("El equipo ya tiene una solicitud activa.");
+                }
+            }
+
+            SolicitudServicio solicitud = new SolicitudServicio(datos.GenerarCodigo("SOL"),cliente, equipo, problema, prioridad, datos.Solicitudes.Count + 1
+            );
+
+            solicitud.PasarAEspera();
+            datos.Solicitudes.Add(solicitud);
+
+            if (prioridad == "Urgente")
+            {
+                colaUrgente.Enqueue(solicitud);
+            }
+            else
+            {
+                colaNormal.Enqueue(solicitud);
+            }
+
+            return solicitud;
+        }
+
+        public SolicitudServicio[] ObtenerColaUrgente()
+        {
+            return colaUrgente.ToArray();
+        }
+
+        public SolicitudServicio[] ObtenerColaNormal()
+        {
+            return colaNormal.ToArray();
+        }
+
+        public SolicitudServicio AtenderSiguiente()
+        {
+            Queue<SolicitudServicio> cola;
+
+            if (colaUrgente.Count > 0)
+            {
+                cola = colaUrgente;
+            }
+            else if (colaNormal.Count > 0)
+            {
+                cola = colaNormal;
+            }
+            else
+            {
+                return null;
+            }
+
+            SolicitudServicio solicitud = cola.Peek();
+
+            Tecnico elegido = null;
+            int menorCarga = int.MaxValue;
+
+            foreach (Tecnico tecnico in datos.Tecnicos)
+            {
+                int carga = tecnico.CalcularCarga(datos.Solicitudes);
+
+                if (tecnico.Habilitado && tecnico.Especialidad == solicitud.Equipo.Tipo && carga < tecnico.LimiteActivos)
+                {
+                    if (elegido == null || carga < menorCarga)
+                    {
+                        elegido = tecnico;
+                        menorCarga = carga;
+                    }
+                    else if (carga == menorCarga && string.CompareOrdinal(tecnico.Codigo, elegido.Codigo) < 0)
+                    {
+                        elegido = tecnico;
+                    }
+                }
+            }
+
+            if (elegido == null)
+            {
+                throw new ArgumentException("La solicitud " + solicitud.Codigo + " sigue en cola: no hay técnico habilitado de " + solicitud.Equipo.Tipo + " con cupo disponible.");
+            }
+
+            solicitud.AsignarTecnico(elegido);
+            cola.Dequeue();
+
+            return solicitud;
+        }
     }
     public class MenuConsola
     {
@@ -1099,9 +1241,11 @@ namespace Proyecto_XelaTech
                 Console.WriteLine("2. Gestión de técnicos");
                 Console.WriteLine("3. Gestión de equipos");
                 Console.WriteLine("4. Gestión de repuestos");
+                Console.WriteLine("5. Solicitudes de servicio");
+                Console.WriteLine("6. Colas de atención");
                 Console.WriteLine("0. Salir");
 
-                opcion = LeerEntero("Seleccione una opción: ", 0, 4);
+                opcion = LeerEntero("Seleccione una opción: ", 0, 6);
 
                 switch (opcion)
                 {
@@ -1114,9 +1258,14 @@ namespace Proyecto_XelaTech
                     case 3:
                         MenuEquipos();
                         break;
-
                     case 4:
                         MenuRepuestos();
+                        break;
+                    case 5:
+                        MenuSolicitudes();
+                        break;
+                    case 6:
+                        MenuColas();
                         break;
                     case 0:
                         Console.WriteLine("Saliendo del programa...");
@@ -1930,11 +2079,183 @@ namespace Proyecto_XelaTech
             decimal costo = LeerDecimal("Costo Q: ", 0);
             decimal precio = LeerDecimal("Precio Q: ", costo);
 
-            gestor.ActualizarRepuesto(
-                codigo, nombre, categoria, minimo, costo, precio
-            );
+            gestor.ActualizarRepuesto(codigo, nombre, categoria, minimo, costo, precio);
 
             Console.WriteLine("Repuesto actualizado correctamente.");
+        }
+        private void MenuSolicitudes()
+        {
+            int opcion;
+
+            do
+            {
+                Console.Clear();
+                Console.WriteLine("SOLICITUDES DE SERVICIO");
+                Console.WriteLine("1. Crear solicitud");
+                Console.WriteLine("2. Mostrar solicitudes");
+                Console.WriteLine("0. Volver");
+
+                opcion = LeerEntero("Seleccione: ", 0, 2);
+
+                try
+                {
+                    switch (opcion)
+                    {
+                        case 1:
+                            CrearSolicitud();
+                            break;
+                        case 2:
+                            if (datos.Solicitudes.Count == 0)
+                            {
+                                Console.WriteLine("Sin solicitudes registradas.");
+                            }
+
+                            foreach (SolicitudServicio solicitud in datos.Solicitudes)
+                            {
+                                MostrarSolicitud(solicitud);
+                            }
+                            break;
+                    }
+                }
+                catch (ArgumentException error)
+                {
+                    Console.WriteLine("Error: " + error.Message);
+                }
+
+                if (opcion != 0)
+                {
+                    Pausar();
+                }
+
+            } while (opcion != 0);
+        }
+
+        private void CrearSolicitud()
+        {
+            if (datos.Clientes.Count == 0 || datos.Equipos.Count == 0)
+            {
+                Console.WriteLine("Primero registre un cliente y su equipo.");
+                return;
+            }
+
+            MostrarEquipos();
+
+            string cliente = LeerTexto("Código del cliente: ");
+            string equipo = LeerTexto("Código del equipo: ");
+            string problema = LeerTexto("Descripción del problema: ");
+
+            int opcion = LeerEntero("Prioridad: 1 Normal / 2 Urgente: ", 1, 2);
+
+            string prioridad;
+
+            if (opcion == 1)
+            {
+                prioridad = "Normal";
+            }
+            else
+            {
+                prioridad = "Urgente";
+            }
+
+            SolicitudServicio solicitud = gestor.CrearSolicitud(cliente, equipo, problema, prioridad);
+
+            Console.WriteLine("Solicitud creada y encolada correctamente.");
+            MostrarSolicitud(solicitud);
+        }
+
+        private void MostrarSolicitud(SolicitudServicio solicitud)
+        {
+            Console.WriteLine("--------------------------------");
+            Console.WriteLine("Código: " + solicitud.Codigo);
+            Console.WriteLine("Cliente: " + solicitud.Cliente.NombreCompleto);
+            Console.WriteLine("Equipo: " + solicitud.Equipo.Codigo + " - " + solicitud.Equipo.Tipo);
+            Console.WriteLine("Problema: " + solicitud.Problema);
+            Console.WriteLine("Recepción: " + solicitud.FechaRecepcion);
+            Console.WriteLine("Prioridad: " + solicitud.Prioridad);
+            Console.WriteLine("Estado: " + solicitud.Estado);
+
+            if (solicitud.TecnicoAsignado == null)
+            {
+                Console.WriteLine("Técnico: Sin asignar");
+            }
+            else
+            {
+                Console.WriteLine("Técnico: " + solicitud.TecnicoAsignado.Codigo + " - " + solicitud.TecnicoAsignado.NombreCompleto);
+            }
+
+            if (solicitud.FechaAsignacion != null)
+            {
+                Console.WriteLine("Fecha de asignación: " + solicitud.FechaAsignacion);
+            }
+        }
+        private void MenuColas()
+        {
+            int opcion;
+
+            do
+            {
+                Console.Clear();
+                Console.WriteLine("COLAS DE ATENCIÓN");
+                Console.WriteLine("1. Ver urgentes");
+                Console.WriteLine("2. Ver normales");
+                Console.WriteLine("3. Atender siguiente");
+                Console.WriteLine("0. Volver");
+
+                opcion = LeerEntero("Seleccione: ", 0, 3);
+
+                try
+                {
+                    switch (opcion)
+                    {
+                        case 1:
+                            MostrarCola(gestor.ObtenerColaUrgente());
+                            break;
+
+                        case 2:
+                            MostrarCola(gestor.ObtenerColaNormal());
+                            break;
+
+                        case 3:
+                            SolicitudServicio atendida = gestor.AtenderSiguiente();
+
+                            if (atendida == null)
+                            {
+                                Console.WriteLine("No hay solicitudes en espera.");
+                            }
+                            else
+                            {
+                                Console.WriteLine("Asignación realizada correctamente.");
+
+                                MostrarSolicitud(atendida);
+                            }
+                            break;
+                    }
+                }
+                catch (ArgumentException error)
+                {
+                    Console.WriteLine("Error: " + error.Message);
+                }
+
+                if (opcion != 0)
+                {
+                    Pausar();
+                }
+
+            } while (opcion != 0);
+        }
+
+        private void MostrarCola(SolicitudServicio[] cola)
+        {
+            if (cola.Length == 0)
+            {
+                Console.WriteLine("Esta cola está vacía.");
+            }
+
+            for (int i = 0; i < cola.Length; i++)
+            {
+                Console.WriteLine("Turno: " + (i + 1));
+                MostrarSolicitud(cola[i]);
+            }
         }
         private int LeerEntero(string mensaje, int minimo, int maximo)
         {
@@ -2028,7 +2349,164 @@ namespace Proyecto_XelaTech
             Console.ReadKey();
         }
     }
+    public class SolicitudServicio
+    {
+        private string codigo;
+        private Cliente cliente;
+        private Equipo equipo;
+        private string problema;
+        private DateTime fechaRecepcion;
+        private string prioridad;
+        private string estado;
+        private Tecnico tecnicoAsignado;
+        private DateTime? fechaAsignacion;
+        private int ordenLlegada;
 
+        public string Codigo
+        {
+            get { return codigo; }
+        }
+
+        public Cliente Cliente
+        {
+            get { return cliente; }
+        }
+
+        public Equipo Equipo
+        {
+            get { return equipo; }
+        }
+
+        public string Problema
+        {
+            get { return problema; }
+        }
+
+        public DateTime FechaRecepcion
+        {
+            get { return fechaRecepcion; }
+        }
+
+        public string Prioridad
+        {
+            get { return prioridad; }
+        }
+
+        public string Estado
+        {
+            get { return estado; }
+        }
+
+        public Tecnico TecnicoAsignado
+        {
+            get { return tecnicoAsignado; }
+        }
+
+        public DateTime? FechaAsignacion
+        {
+            get { return fechaAsignacion; }
+        }
+
+        public int OrdenLlegada
+        {
+            get { return ordenLlegada; }
+        }
+
+        public SolicitudServicio(string codigo, Cliente cliente, Equipo equipo, string problema, int ordenLlegada) : this(codigo, cliente, equipo, problema, "Normal", ordenLlegada)
+        {
+        }
+
+        public SolicitudServicio(string codigo, Cliente cliente, Equipo equipo, string problema, string prioridad, int ordenLlegada)
+        {
+            if (string.IsNullOrWhiteSpace(codigo))
+            {
+                throw new ArgumentException("El código es obligatorio.");
+            }
+
+            if (cliente == null || equipo == null)
+            {
+                throw new ArgumentException("Debe indicar un cliente y un equipo.");
+            }
+
+            if (equipo.Propietario != cliente)
+            {
+                throw new ArgumentException("El cliente debe ser propietario del equipo.");
+            }
+
+            if (string.IsNullOrWhiteSpace(problema))
+            {
+                throw new ArgumentException("Debe describir el problema.");
+            }
+
+            if (prioridad != "Normal" && prioridad != "Urgente")
+            {
+                throw new ArgumentException("La prioridad debe ser Normal o Urgente.");
+            }
+
+            if (ordenLlegada <= 0)
+            {
+                throw new ArgumentException("El orden de llegada debe ser positivo.");
+            }
+
+            this.codigo = codigo.Trim();
+            this.cliente = cliente;
+            this.equipo = equipo;
+            this.problema = problema.Trim();
+            this.prioridad = prioridad;
+            this.ordenLlegada = ordenLlegada;
+
+            fechaRecepcion = DateTime.Now;
+            estado = "Recibida";
+            tecnicoAsignado = null;
+            fechaAsignacion = null;
+        }
+
+        public bool EsActiva()
+        {
+            return estado != "Entregada" && estado != "Cancelada";
+        }
+
+        internal void PasarAEspera()
+        {
+            if (estado != "Recibida")
+            {
+                throw new ArgumentException("Solo una solicitud recibida puede entrar en espera.");
+            }
+
+            estado = "EnEspera";
+        }
+
+        internal void AsignarTecnico(Tecnico tecnico)
+        {
+            if (estado != "EnEspera")
+            {
+                throw new ArgumentException("La solicitud no está en espera.");
+            }
+
+            if (tecnico == null ||
+                !tecnico.Habilitado ||
+                tecnico.Especialidad != equipo.Tipo)
+            {
+                throw new ArgumentException("El técnico no está habilitado o no es compatible.");
+            }
+
+            DateTime fecha = DateTime.Now;
+
+            if (fecha.DayOfWeek == DayOfWeek.Sunday)
+            {
+                throw new ArgumentException("Las asignaciones se realizan de lunes a sábado.");
+            }
+
+            if (fecha < fechaRecepcion)
+            {
+                throw new ArgumentException("La asignación no puede ser anterior a la recepción.");
+            }
+
+            tecnicoAsignado = tecnico;
+            fechaAsignacion = fecha;
+            estado = "Asignada";
+        }
+    }
     internal class Program
     {
         static void Main(string[] args)
