@@ -496,10 +496,196 @@ namespace Proyecto_XelaTech
             return "Revisar alimentación de papel, tinta o tóner y calidad de impresión.";
         }
     }
+    public class Repuesto
+    {
+        private string codigo;
+        private string nombre;
+        private string categoria;
+        private int existencia;
+        private int existenciaMinima;
+        private decimal costoUnitario;
+        private decimal precioVenta;
+        private int cantidadUtilizada;
+
+        public string Codigo
+        {
+            get { return codigo; }
+        }
+
+        public string Nombre
+        {
+            get { return nombre; }
+
+            set
+            {
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    throw new ArgumentException("El nombre del repuesto es obligatorio.");
+                }
+
+                nombre = value.Trim();
+            }
+        }
+
+        public string Categoria
+        {
+            get { return categoria; }
+
+            set
+            {
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    throw new ArgumentException("La categoría es obligatoria.");
+                }
+
+                categoria = value.Trim();
+            }
+        }
+
+        public int Existencia
+        {
+            get { return existencia; }
+        }
+
+        public int ExistenciaMinima
+        {
+            get { return existenciaMinima; }
+
+            set
+            {
+                if (value < 0)
+                {
+                    throw new ArgumentException("La existencia mínima no puede ser negativa.");
+                }
+
+                existenciaMinima = value;
+            }
+        }
+
+        public decimal CostoUnitario
+        {
+            get { return costoUnitario; }
+
+            set
+            {
+                if (value < 0 || value > precioVenta)
+                {
+                    throw new ArgumentException("El costo debe estar entre cero y el precio de venta.");
+                }
+
+                costoUnitario = value;
+            }
+        }
+
+        public decimal PrecioVenta
+        {
+            get { return precioVenta; }
+
+            set
+            {
+                if (value < 0 || value < costoUnitario)
+                {
+                    throw new ArgumentException("El precio de venta no puede ser menor al costo.");
+                }
+
+                precioVenta = value;
+            }
+        }
+
+        public int CantidadUtilizada
+        {
+            get { return cantidadUtilizada; }
+        }
+
+        public Repuesto(string codigo, string nombre, string categoria, int existencia, int minimo, decimal costo, decimal precio)
+        {
+            if (string.IsNullOrWhiteSpace(codigo))
+            {
+                throw new ArgumentException("El código es obligatorio.");
+            }
+
+            if (existencia < 0)
+            {
+                throw new ArgumentException("La existencia no puede ser negativa.");
+            }
+
+            if (costo < 0 || precio < costo)
+            {
+                throw new ArgumentException("El costo no puede ser negativo ni superar el precio.");
+            }
+
+            this.codigo = codigo.Trim();
+
+            Nombre = nombre;
+            Categoria = categoria;
+            ExistenciaMinima = minimo;
+
+            PrecioVenta = precio;
+            CostoUnitario = costo;
+
+            this.existencia = existencia;
+            cantidadUtilizada = 0;
+        }
+
+        public void ActualizarDatos(string nombre, string categoria, int minimo, decimal costo, decimal precio)
+        {
+            Repuesto validado = new Repuesto(Codigo, nombre, categoria, Existencia, minimo, costo, precio);
+
+            Nombre = validado.Nombre;
+            Categoria = validado.Categoria;
+            ExistenciaMinima = validado.ExistenciaMinima;
+
+            costoUnitario = validado.CostoUnitario;
+            precioVenta = validado.PrecioVenta;
+        }
+
+        public void RegistrarEntrada(int cantidad)
+        {
+            if (cantidad <= 0)
+            {
+                throw new ArgumentException("La entrada debe ser mayor que cero.");
+            }
+
+            if (cantidad > int.MaxValue - existencia)
+            {
+                throw new ArgumentException("La cantidad supera la capacidad del inventario.");
+            }
+
+            existencia = existencia + cantidad;
+        }
+
+        public void Consumir(int cantidad)
+        {
+            if (cantidad <= 0)
+            {
+                throw new ArgumentException("La cantidad utilizada debe ser mayor que cero.");
+            }
+
+            if (cantidad > existencia)
+            {
+                throw new ArgumentException("No hay existencia suficiente.");
+            }
+
+            if (cantidad > int.MaxValue - cantidadUtilizada)
+            {
+                throw new ArgumentException("Se alcanzó el límite del contador de consumo.");
+            }
+
+            existencia = existencia - cantidad;
+            cantidadUtilizada = cantidadUtilizada + cantidad;
+        }
+
+        public bool EstaEnMinimo()
+        {
+            return existencia <= existenciaMinima;
+        }
+    }
     public class DatosSistema
     {
         private List<Cliente> clientes;
         private List<Tecnico> tecnicos;
+        private List<Equipo> equipos;
+        private List<Repuesto> repuestos;
         private int[] secuencias;
 
         public List<Cliente> Clientes
@@ -510,10 +696,22 @@ namespace Proyecto_XelaTech
         {
             get { return tecnicos; }
         }
+        public List<Equipo> Equipos
+        {
+            get { return equipos; }
+        }
+
+        public List<Repuesto> Repuestos
+        {
+            get { return repuestos; }
+        }
         public DatosSistema()
         {
             clientes = new List<Cliente>();
             tecnicos = new List<Tecnico>();
+            equipos = new List<Equipo>();
+            repuestos = new List<Repuesto>();
+
             secuencias = new int[9];
         }
 
@@ -601,7 +799,21 @@ namespace Proyecto_XelaTech
                     return true;
                 }
             }
+            foreach (Equipo equipo in equipos)
+            {
+                if (equipo.Codigo.ToUpper() == codigoBuscado)
+                {
+                    return true;
+                }
+            }
 
+            foreach (Repuesto repuesto in repuestos)
+            {
+                if (repuesto.Codigo.ToUpper() == codigoBuscado)
+                {
+                    return true;
+                }
+            }
             return false;
         }
     }
@@ -731,6 +943,131 @@ namespace Proyecto_XelaTech
 
             tecnico.ActualizarNombre(nombre);
         }
+        public Equipo BuscarEquipoPorCodigo(string codigo)
+        {
+            if (string.IsNullOrWhiteSpace(codigo))
+            {
+                throw new ArgumentException("Debe proporcionar el código del equipo.");
+            }
+
+            string buscado = codigo.Trim().ToUpper();
+
+            foreach (Equipo equipo in datos.Equipos)
+            {
+                if (equipo.Codigo.ToUpper() == buscado)
+                {
+                    return equipo;
+                }
+            }
+
+            return null;
+        }
+
+        public Equipo BuscarEquipoPorSerie(string serie)
+        {
+            if (string.IsNullOrWhiteSpace(serie))
+            {
+                throw new ArgumentException("Debe proporcionar el número de serie.");
+            }
+
+            string buscada = serie.Trim().ToUpper();
+
+            foreach (Equipo equipo in datos.Equipos)
+            {
+                if (equipo.NumeroSerie.ToUpper() == buscada)
+                {
+                    return equipo;
+                }
+            }
+
+            return null;
+        }
+
+        public void RegistrarEquipo(Equipo equipo)
+        {
+            if (equipo == null)
+            {
+                throw new ArgumentException("Debe proporcionar un equipo.");
+            }
+
+            if (datos.ExisteCodigo(equipo.Codigo))
+            {
+                throw new ArgumentException("Ya existe un registro con ese código.");
+            }
+
+            if (BuscarEquipoPorSerie(equipo.NumeroSerie) != null)
+            {
+                throw new ArgumentException("Ya existe un equipo con ese número de serie.");
+            }
+
+            Cliente propietario = BuscarClientePorCodigo(equipo.Propietario.Codigo);
+
+            if (propietario == null || propietario != equipo.Propietario)
+            {
+                throw new ArgumentException("El propietario debe ser un cliente registrado.");
+            }
+
+            datos.Equipos.Add(equipo);
+        }
+
+        public Repuesto BuscarRepuestoPorCodigo(string codigo)
+        {
+            if (string.IsNullOrWhiteSpace(codigo))
+            {
+                throw new ArgumentException("Debe proporcionar el código del repuesto.");
+            }
+
+            string buscado = codigo.Trim().ToUpper();
+
+            foreach (Repuesto repuesto in datos.Repuestos)
+            {
+                if (repuesto.Codigo.ToUpper() == buscado)
+                {
+                    return repuesto;
+                }
+            }
+
+            return null;
+        }
+
+        public void RegistrarRepuesto(Repuesto repuesto)
+        {
+            if (repuesto == null)
+            {
+                throw new ArgumentException("Debe proporcionar un repuesto.");
+            }
+
+            if (datos.ExisteCodigo(repuesto.Codigo))
+            {
+                throw new ArgumentException("Ya existe un registro con ese código.");
+            }
+
+            datos.Repuestos.Add(repuesto);
+        }
+
+        public void RegistrarEntradaInventario(string codigo, int cantidad)
+        {
+            Repuesto repuesto = BuscarRepuestoPorCodigo(codigo);
+
+            if (repuesto == null)
+            {
+                throw new ArgumentException("No existe un repuesto con ese código.");
+            }
+
+            repuesto.RegistrarEntrada(cantidad);
+        }
+
+        public void ActualizarRepuesto(string codigo, string nombre, string categoria, int minimo, decimal costo, decimal precio)
+        {
+            Repuesto repuesto = BuscarRepuestoPorCodigo(codigo);
+
+            if (repuesto == null)
+            {
+                throw new ArgumentException("No existe un repuesto con ese código.");
+            }
+
+            repuesto.ActualizarDatos(nombre, categoria, minimo, costo, precio);
+        }
     }
     public class MenuConsola
     {
@@ -760,9 +1097,11 @@ namespace Proyecto_XelaTech
                 Console.WriteLine("================================");
                 Console.WriteLine("1. Gestión de clientes");
                 Console.WriteLine("2. Gestión de técnicos");
+                Console.WriteLine("3. Gestión de equipos");
+                Console.WriteLine("4. Gestión de repuestos");
                 Console.WriteLine("0. Salir");
 
-                opcion = LeerEntero("Seleccione una opción: ", 0, 2);
+                opcion = LeerEntero("Seleccione una opción: ", 0, 4);
 
                 switch (opcion)
                 {
@@ -771,6 +1110,13 @@ namespace Proyecto_XelaTech
                         break;
                     case 2:
                         MenuTecnicos();
+                        break;
+                    case 3:
+                        MenuEquipos();
+                        break;
+
+                    case 4:
+                        MenuRepuestos();
                         break;
                     case 0:
                         Console.WriteLine("Saliendo del programa...");
@@ -1219,6 +1565,377 @@ namespace Proyecto_XelaTech
             Console.WriteLine("Nombre actualizado correctamente.");
             Console.WriteLine("Nombre: " + tecnico.NombreCompleto);
         }
+        
+        private void MenuEquipos()
+        {
+            int opcion;
+
+            do
+            {
+                Console.Clear();
+                Console.WriteLine("GESTIÓN DE EQUIPOS");
+                Console.WriteLine("1. Registrar portátil");
+                Console.WriteLine("2. Registrar escritorio");
+                Console.WriteLine("3. Registrar impresora");
+                Console.WriteLine("4. Mostrar equipos");
+                Console.WriteLine("5. Buscar por número de serie");
+                Console.WriteLine("0. Volver");
+
+                opcion = LeerEntero("Seleccione: ", 0, 5);
+
+                try
+                {
+                    switch (opcion)
+                    {
+                        case 1:
+                        case 2:
+                        case 3:
+                            RegistrarEquipo(opcion);
+                            break;
+
+                        case 4:
+                            MostrarEquipos();
+                            break;
+
+                        case 5:
+                            string serie = LeerTexto("Número de serie: ");
+                            Equipo encontrado = gestor.BuscarEquipoPorSerie(serie);
+
+                            if (encontrado == null)
+                            {
+                                Console.WriteLine("No se encontró el equipo.");
+                            }
+                            else
+                            {
+                                MostrarEquipo(encontrado);
+                            }
+                            break;
+                    }
+                }
+                catch (ArgumentException error)
+                {
+                    Console.WriteLine("Error: " + error.Message);
+                }
+
+                if (opcion != 0)
+                {
+                    Pausar();
+                }
+
+            } while (opcion != 0);
+        }
+
+        private void RegistrarEquipo(int tipo)
+        {
+            if (datos.Clientes.Count == 0)
+            {
+                Console.WriteLine("Primero debe registrar al propietario.");
+                return;
+            }
+
+            MostrarClientes();
+
+            string codigoCliente = LeerTexto("Código del propietario: ");
+            Cliente propietario = gestor.BuscarClientePorCodigo(codigoCliente);
+
+            if (propietario == null)
+            {
+                throw new ArgumentException("El cliente no está registrado.");
+            }
+
+            string serie = LeerTexto("Número de serie: ");
+
+            if (gestor.BuscarEquipoPorSerie(serie) != null)
+            {
+                throw new ArgumentException("El número de serie ya está registrado.");
+            }
+
+            string marca = LeerTexto("Marca: ");
+            string modelo = LeerTexto("Modelo: ");
+            string estado = LeerTexto("Estado físico recibido: ");
+
+            List<string> accesorios = new List<string>();
+
+            if (tipo == 1)
+            {
+                int cargador = LeerEntero("¿Incluye cargador? 1 Sí / 2 No: ", 1, 2);
+
+                if (cargador == 1)
+                {
+                    accesorios.Add("Cargador");
+                }
+
+                Console.WriteLine("Registre los demás accesorios, si existen.");
+            }
+
+            int cantidad = LeerEntero("Cantidad de accesorios a agregar (0 si ninguno): ", 0, 30);
+
+            for (int i = 0; i < cantidad; i++)
+            {
+                accesorios.Add(LeerTexto("Accesorio " + (i + 1) + ": "));
+            }
+
+            string codigo = datos.GenerarCodigo("EQU");
+            Equipo equipo;
+
+            if (tipo == 1)
+            {
+                equipo = new Portatil(codigo, serie, marca, modelo, propietario, estado, accesorios);
+            }
+            else if (tipo == 2)
+            {
+                string gabinete = LeerTexto("Formato del gabinete: ");
+
+                equipo = new Escritorio(codigo, serie, marca, modelo, propietario, estado, accesorios, gabinete);
+            }
+            else
+            {
+                string tecnologia = LeerTexto("Tecnología de impresión: ");
+
+                equipo = new Impresora(
+                    codigo, serie, marca, modelo,
+                    propietario, estado, accesorios, tecnologia
+                );
+            }
+
+            gestor.RegistrarEquipo(equipo);
+
+            Console.WriteLine("Equipo registrado: " + equipo.Codigo);
+        }
+
+        private void MostrarEquipos()
+        {
+            Console.WriteLine("EQUIPOS REGISTRADOS");
+
+            if (datos.Equipos.Count == 0)
+            {
+                Console.WriteLine("Sin equipos registrados.");
+            }
+
+            foreach (Equipo equipo in datos.Equipos)
+            {
+                MostrarEquipo(equipo);
+            }
+
+            Console.WriteLine("Total de equipos: " + datos.Equipos.Count);
+        }
+
+        private void MostrarEquipo(Equipo equipo)
+        {
+            Console.WriteLine("--------------------------------");
+            Console.WriteLine("Código: " + equipo.Codigo);
+            Console.WriteLine("Tipo: " + equipo.Tipo);
+            Console.WriteLine("Serie: " + equipo.NumeroSerie);
+            Console.WriteLine("Marca: " + equipo.Marca);
+            Console.WriteLine("Modelo: " + equipo.Modelo);
+            Console.WriteLine("Propietario: " + equipo.Propietario.NombreCompleto);
+            Console.WriteLine("Estado físico: " + equipo.EstadoFisico);
+
+            List<string> accesorios = equipo.Accesorios;
+
+            if (accesorios.Count == 0)
+            {
+                Console.WriteLine("Accesorios: Ninguno");
+            }
+            else
+            {
+                Console.WriteLine("Accesorios:");
+
+                foreach (string accesorio in accesorios)
+                {
+                    Console.WriteLine("- " + accesorio);
+                }
+            }
+
+            if (equipo is Portatil)
+            {
+                Portatil portatil = (Portatil)equipo;
+                Console.WriteLine("Incluye cargador: " + portatil.IncluyeCargador);
+            }
+            else if (equipo is Escritorio)
+            {
+                Escritorio escritorio = (Escritorio)equipo;
+                Console.WriteLine("Gabinete: " + escritorio.FormatoGabinete);
+            }
+            else if (equipo is Impresora)
+            {
+                Impresora impresora = (Impresora)equipo;
+                Console.WriteLine("Tecnología: " + impresora.Tecnologia);
+            }
+
+            Console.WriteLine("Guía: " + equipo.ObtenerGuiaDiagnostico());
+        }
+        private void MenuRepuestos()
+        {
+            int opcion;
+
+            do
+            {
+                Console.Clear();
+                Console.WriteLine("GESTIÓN DE REPUESTOS");
+                Console.WriteLine("1. Registrar repuesto");
+                Console.WriteLine("2. Mostrar repuestos");
+                Console.WriteLine("3. Entrada a inventario");
+                Console.WriteLine("4. Actualizar datos y precios");
+                Console.WriteLine("5. Mostrar mínimos y agotados");
+                Console.WriteLine("0. Volver");
+
+                opcion = LeerEntero("Seleccione: ", 0, 5);
+
+                try
+                {
+                    switch (opcion)
+                    {
+                        case 1:
+                            RegistrarRepuesto();
+                            break;
+
+                        case 2:
+                            MostrarRepuestos(false);
+                            break;
+
+                        case 3:
+                            EntradaInventario();
+                            break;
+
+                        case 4:
+                            ActualizarRepuesto();
+                            break;
+
+                        case 5:
+                            MostrarRepuestos(true);
+                            break;
+                    }
+                }
+                catch (ArgumentException error)
+                {
+                    Console.WriteLine("Error: " + error.Message);
+                }
+
+                if (opcion != 0)
+                {
+                    Pausar();
+                }
+
+            } while (opcion != 0);
+        }
+
+        private void RegistrarRepuesto()
+        {
+            string nombre = LeerTexto("Nombre: ");
+            string categoria = LeerTexto("Categoría: ");
+
+            int existencia = LeerEntero("Existencia inicial: ", 0, int.MaxValue);
+
+            int minimo = LeerEntero("Existencia mínima: ", 0, int.MaxValue);
+
+            decimal costo = LeerDecimal("Costo unitario Q: ", 0);
+            decimal precio = LeerDecimal("Precio de venta Q: ", costo);
+
+            Repuesto repuesto = new Repuesto(datos.GenerarCodigo("REP"), nombre, categoria, existencia, minimo, costo, precio);
+
+            gestor.RegistrarRepuesto(repuesto);
+
+            Console.WriteLine("Repuesto registrado: " + repuesto.Codigo);
+            MostrarRepuesto(repuesto);
+        }
+
+        private void MostrarRepuestos(bool soloMinimos)
+        {
+            if (soloMinimos)
+            {
+                Console.WriteLine("REPUESTOS EN MÍNIMO O AGOTADOS");
+            }
+            else
+            {
+                Console.WriteLine("REPUESTOS REGISTRADOS");
+            }
+
+            int cantidad = 0;
+
+            foreach (Repuesto repuesto in datos.Repuestos)
+            {
+                if (!soloMinimos || repuesto.EstaEnMinimo())
+                {
+                    MostrarRepuesto(repuesto);
+                    cantidad++;
+                }
+            }
+
+            if (cantidad == 0)
+            {
+                Console.WriteLine("Sin registros para mostrar.");
+            }
+
+            Console.WriteLine("Total mostrado: " + cantidad);
+        }
+
+        private void MostrarRepuesto(Repuesto repuesto)
+        {
+            Console.WriteLine("--------------------------------");
+            Console.WriteLine("Código: " + repuesto.Codigo);
+            Console.WriteLine("Nombre: " + repuesto.Nombre);
+            Console.WriteLine("Categoría: " + repuesto.Categoria);
+            Console.WriteLine("Existencia: " + repuesto.Existencia);
+            Console.WriteLine("Existencia mínima: " + repuesto.ExistenciaMinima);
+            Console.WriteLine("Costo Q" + repuesto.CostoUnitario.ToString("F2"));
+            Console.WriteLine("Precio Q" + repuesto.PrecioVenta.ToString("F2"));
+            Console.WriteLine("Cantidad utilizada: " + repuesto.CantidadUtilizada);
+
+            if (repuesto.EstaEnMinimo())
+            {
+                Console.WriteLine("ALERTA: existencia mínima o agotada.");
+            }
+        }
+
+        private void EntradaInventario()
+        {
+            string codigo = LeerTexto("Código del repuesto: ");
+            Repuesto repuesto = gestor.BuscarRepuestoPorCodigo(codigo);
+
+            if (repuesto == null)
+            {
+                throw new ArgumentException("El repuesto no existe.");
+            }
+
+            MostrarRepuesto(repuesto);
+
+            int cantidad = LeerEntero("Cantidad que ingresa: ", 1, int.MaxValue);
+
+            gestor.RegistrarEntradaInventario(codigo, cantidad);
+
+            Console.WriteLine("Entrada registrada.");
+            MostrarRepuesto(repuesto);
+        }
+
+        private void ActualizarRepuesto()
+        {
+            string codigo = LeerTexto("Código del repuesto: ");
+            Repuesto repuesto = gestor.BuscarRepuestoPorCodigo(codigo);
+
+            if (repuesto == null)
+            {
+                throw new ArgumentException("El repuesto no existe.");
+            }
+
+            MostrarRepuesto(repuesto);
+
+            Console.WriteLine("Escriba todos los datos; repita el valor actual si no cambia.");
+
+            string nombre = LeerTexto("Nombre: ");
+            string categoria = LeerTexto("Categoría: ");
+
+            int minimo = LeerEntero("Existencia mínima: ", 0, int.MaxValue);
+
+            decimal costo = LeerDecimal("Costo Q: ", 0);
+            decimal precio = LeerDecimal("Precio Q: ", costo);
+
+            gestor.ActualizarRepuesto(
+                codigo, nombre, categoria, minimo, costo, precio
+            );
+
+            Console.WriteLine("Repuesto actualizado correctamente.");
+        }
         private int LeerEntero(string mensaje, int minimo, int maximo)
         {
             int valor;
@@ -1265,7 +1982,53 @@ namespace Proyecto_XelaTech
 
             return texto.Trim();
         }
+        private decimal LeerDecimal(string mensaje, decimal minimo)
+        {
+            decimal valor;
+            bool valido;
+
+            do
+            {
+                Console.Write(mensaje);
+                string entrada = Console.ReadLine();
+
+                if (entrada == null)
+                {
+                    throw new ArgumentException("No se recibió un importe.");
+                }
+
+                entrada = entrada.Trim().Replace(',', '.');
+
+                valido = decimal.TryParse(
+                    entrada,
+                    System.Globalization.NumberStyles.AllowLeadingSign |
+                    System.Globalization.NumberStyles.AllowDecimalPoint,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out valor
+                );
+
+                if (!valido || valor < minimo)
+                {
+                    Console.WriteLine(
+                        "Ingrese un importe mayor o igual a " + minimo +
+                        ", sin separadores de miles."
+                    );
+
+                    valido = false;
+                }
+
+            } while (!valido);
+
+            return valor;
+        }
+
+        private void Pausar()
+        {
+            Console.WriteLine("Presione una tecla para continuar...");
+            Console.ReadKey();
+        }
     }
+
     internal class Program
     {
         static void Main(string[] args)
