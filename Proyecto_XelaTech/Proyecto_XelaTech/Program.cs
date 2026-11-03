@@ -973,13 +973,7 @@ namespace Proyecto_XelaTech
                     break;
             }
 
-            gestor.ActualizarCliente(
-                cliente.Codigo,
-                nombre,
-                telefono,
-                correo,
-                tipo
-            );
+            gestor.ActualizarCliente(cliente.Codigo, nombre, telefono, correo, tipo);
 
             Console.WriteLine();
             Console.WriteLine("Cliente actualizado correctamente.");
@@ -996,9 +990,11 @@ namespace Proyecto_XelaTech
                 Console.WriteLine("================================");
                 Console.WriteLine("1. Registrar técnico");
                 Console.WriteLine("2. Mostrar técnicos");
+                Console.WriteLine("3. Habilitar o deshabilitar técnico");
+                Console.WriteLine("4. Actualizar nombre del técnico");
                 Console.WriteLine("0. Volver al menú principal");
 
-                opcion = LeerEntero("Seleccione una opción: ", 0, 2);
+                opcion = LeerEntero("Seleccione una opción: ", 0, 4);
 
                 try
                 {
@@ -1010,6 +1006,14 @@ namespace Proyecto_XelaTech
 
                         case 2:
                             MostrarTecnicos();
+                            break;
+
+                        case 3:
+                            CambiarHabilitacionTecnico();
+                            break;
+
+                        case 4:
+                            ActualizarNombreTecnico();
                             break;
                     }
                 }
@@ -1113,6 +1117,107 @@ namespace Proyecto_XelaTech
             }
 
             Console.WriteLine("Total de técnicos: " + datos.Tecnicos.Count);
+        }
+        private void CambiarHabilitacionTecnico()
+        {
+            Console.Clear();
+            Console.WriteLine("HABILITAR O DESHABILITAR TÉCNICO");
+            Console.WriteLine();
+
+            if (datos.Tecnicos.Count == 0)
+            {
+                Console.WriteLine("Todavía no hay técnicos registrados.");
+                return;
+            }
+
+            string codigo = LeerTexto("Código del técnico: ");
+
+            Tecnico tecnico = gestor.BuscarTecnicoPorCodigo(codigo);
+
+            if (tecnico == null)
+            {
+                Console.WriteLine("No existe un técnico con ese código.");
+                return;
+            }
+
+            Console.WriteLine("Nombre: " + tecnico.NombreCompleto);
+            Console.WriteLine("Especialidad: " + tecnico.Especialidad);
+
+            if (tecnico.Habilitado)
+            {
+                Console.WriteLine("Estado actual: Habilitado");
+            }
+            else
+            {
+                Console.WriteLine("Estado actual: Deshabilitado");
+            }
+
+            Console.WriteLine();
+            Console.WriteLine("1. Habilitar");
+            Console.WriteLine("2. Deshabilitar");
+            Console.WriteLine("0. Cancelar");
+
+            int opcion = LeerEntero("Seleccione una opción: ", 0, 2);
+
+            if (opcion == 0)
+            {
+                Console.WriteLine("Operación cancelada.");
+                return;
+            }
+
+            bool habilitado;
+
+            if (opcion == 1)
+            {
+                habilitado = true;
+            }
+            else
+            {
+                habilitado = false;
+            }
+
+            gestor.HabilitarTecnico(tecnico.Codigo, habilitado);
+
+            if (habilitado)
+            {
+                Console.WriteLine("El técnico quedó habilitado.");
+            }
+            else
+            {
+                Console.WriteLine("El técnico quedó deshabilitado.");
+            }
+        }
+        private void ActualizarNombreTecnico()
+        {
+            Console.Clear();
+            Console.WriteLine("ACTUALIZAR NOMBRE DEL TÉCNICO");
+            Console.WriteLine();
+
+            if (datos.Tecnicos.Count == 0)
+            {
+                Console.WriteLine("Todavía no hay técnicos registrados.");
+                return;
+            }
+
+            string codigo = LeerTexto("Código del técnico: ");
+
+            Tecnico tecnico = gestor.BuscarTecnicoPorCodigo(codigo);
+
+            if (tecnico == null)
+            {
+                Console.WriteLine("No existe un técnico con ese código.");
+                return;
+            }
+
+            Console.WriteLine("Nombre actual: " + tecnico.NombreCompleto);
+
+            string nombre = LeerTexto("Nuevo nombre: ");
+
+            gestor.ActualizarNombreTecnico(tecnico.Codigo, nombre);
+
+            Console.WriteLine();
+            Console.WriteLine("Nombre actualizado correctamente.");
+            Console.WriteLine("Nombre: " + tecnico.NombreCompleto);
         }
         private int LeerEntero(string mensaje, int minimo, int maximo)
         {
