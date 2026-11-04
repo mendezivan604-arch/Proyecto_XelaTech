@@ -1689,9 +1689,10 @@ namespace Proyecto_XelaTech
                 Console.WriteLine("6. Colas de atención");
                 Console.WriteLine("7. Ordenamientos");
                 Console.WriteLine("8. Búsquedas");
+                Console.WriteLine("9. Reportes");
                 Console.WriteLine("0. Salir");
 
-                opcion = LeerEntero("Seleccione una opción: ", 0, 8);
+                opcion = LeerEntero("Seleccione una opción: ", 0, 9);
 
                 switch (opcion)
                 {
@@ -1718,6 +1719,9 @@ namespace Proyecto_XelaTech
                         break;
                     case 8:
                         MenuBusquedas();
+                        break;
+                    case 9:
+                        MenuReportes();
                         break;
                     case 0:
                         Console.WriteLine("Saliendo del programa...");
@@ -1861,7 +1865,17 @@ namespace Proyecto_XelaTech
 
                     foreach (Cliente cliente in encontrados)
                     {
-                        Console.WriteLine(cliente.Codigo + " | " + cliente.NombreCompleto + " | " + cliente.Telefono);
+                        int solicitudesCliente = 0;
+
+                        foreach (SolicitudServicio solicitud in datos.Solicitudes)
+                        {
+                            if (solicitud.Cliente == cliente)
+                            {
+                                solicitudesCliente++;
+                            }
+                        }
+
+                        Console.WriteLine(cliente.Codigo + " | " + cliente.NombreCompleto + " | Teléfono: " + cliente.Telefono + " | Correo: " + cliente.Correo + " | Tipo: " + cliente.Tipo + " | Solicitudes: " + solicitudesCliente);
                     }
                 }
                 else if (opcion == 2)
@@ -1923,6 +1937,120 @@ namespace Proyecto_XelaTech
                 if (cantidad == 0)
                 {
                     Console.WriteLine("No se encontraron coincidencias.");
+                }
+
+                Pausar();
+
+            } while (opcion != 0);
+        }
+        private void MenuReportes()
+        {
+            GeneradorReportes reportes = new GeneradorReportes(datos, gestor);
+            int opcion;
+
+            do
+            {
+                Console.Clear();
+                Console.WriteLine("REPORTES");
+                Console.WriteLine("1. Solicitudes en espera por prioridad");
+                Console.WriteLine("2. Solicitudes activas, entregadas y canceladas");
+                Console.WriteLine("3. Disponibilidad de técnicos");
+                Console.WriteLine("4. Ranking de técnicos");
+                Console.WriteLine("5. Equipos atendidos por tipo");
+                Console.WriteLine("6. Solicitudes por costo total");
+                Console.WriteLine("7. Solicitudes por fecha de recepción");
+                Console.WriteLine("8. Repuestos por existencia");
+                Console.WriteLine("9. Repuestos en mínimo o agotados");
+                Console.WriteLine("10. Ingresos por servicios entregados");
+                Console.WriteLine("11. Resultados de búsquedas");
+                Console.WriteLine("12. Matriz de carga semanal");
+                Console.WriteLine("0. Volver");
+
+                opcion = LeerEntero("Opción: ", 0, 12);
+
+                if (opcion == 0)
+                {
+                    return;
+                }
+
+                if (opcion == 11)
+                {
+                    MenuBusquedas();
+                    continue;
+                }
+
+                try
+                {
+                    bool ascendente = true;
+
+                    if (opcion == 6 || opcion == 7)
+                    {
+                        ascendente = LeerEntero("1. Ascendente / 2. Descendente: ", 1, 2) == 1;
+                    }
+
+                    switch (opcion)
+                    {
+                        case 1:
+                            reportes.SolicitudesEnEspera();
+                            break;
+
+                        case 2:
+                            reportes.SolicitudesPorSituacion();
+                            break;
+
+                        case 3:
+                            reportes.DisponibilidadTecnicos();
+                            break;
+
+                        case 4:
+                            reportes.RankingTecnicos();
+                            break;
+
+                        case 5:
+                            reportes.EquiposPorTipo();
+                            break;
+
+                        case 6:
+                            reportes.SolicitudesOrdenadas(true, ascendente);
+                            break;
+
+                        case 7:
+                            reportes.SolicitudesOrdenadas(false, ascendente);
+                            break;
+
+                        case 8:
+                            reportes.Inventario(false);
+                            break;
+
+                        case 9:
+                            reportes.Inventario(true);
+                            break;
+
+                        case 10:
+                            reportes.Ingresos();
+                            break;
+
+                        case 12:
+                            string texto = LeerTexto("Fecha del lunes (dd/MM/yyyy): ");
+
+                            DateTime lunes;
+
+                            if (!DateTime.TryParseExact(texto,"dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out lunes))
+                            {
+                                throw new ArgumentException("Ingrese una fecha válida con formato dd/MM/yyyy.");
+                            }
+
+                            reportes.CargaSemanal(lunes);
+                            break;
+                    }
+                }
+                catch (ArgumentException error)
+                {
+                    Console.WriteLine("Error: " + error.Message);
+                }
+                catch (OverflowException)
+                {
+                    Console.WriteLine("No se pudo completar el total: " + "los importes exceden el límite numérico.");
                 }
 
                 Pausar();
@@ -3787,6 +3915,464 @@ namespace Proyecto_XelaTech
         public string Describir()
         {
             return Codigo + " | " + Fecha + " | " + Anterior + " -> " + Nuevo;
+        }
+    }
+    public class GeneradorReportes
+    {
+        private DatosSistema datos;
+        private GestorAtencion gestor;
+
+        public GeneradorReportes(DatosSistema datos, GestorAtencion gestor)
+        {
+            if (datos == null || gestor == null)
+            {
+                throw new ArgumentException("Faltan los datos o el gestor.");
+            }
+
+            this.datos = datos;
+            this.gestor = gestor;
+        }
+
+        private void Encabezado(string titulo)
+        {
+            Console.WriteLine("\n" + titulo);
+            Console.WriteLine("Fecha: " + DateTime.Now.ToString("dd/MM/yyyy HH:mm"));
+        }
+
+        private string NombreTecnico(SolicitudServicio solicitud)
+        {
+            if (solicitud.TecnicoAsignado == null)
+            {
+                return "Sin asignar";
+            }
+
+            return solicitud.TecnicoAsignado.Codigo + " - " + solicitud.TecnicoAsignado.NombreCompleto;
+        }
+
+        private void MostrarCola(string titulo, SolicitudServicio[] cola)
+        {
+            Console.WriteLine("\n" + titulo + " | Total: " + cola.Length);
+
+            for (int i = 0; i < cola.Length; i++)
+            {
+                SolicitudServicio s = cola[i];
+
+                Console.WriteLine((i + 1) + " | " + s.Codigo + " | " + s.FechaRecepcion + " | " + s.Cliente.NombreCompleto + " | " + s.Equipo.Codigo + " | " + s.Problema);
+            }
+
+            if (cola.Length == 0)
+            {
+                return;
+            }
+
+            bool disponible = false;
+
+            foreach (Tecnico t in datos.Tecnicos)
+            {
+                if (t.Habilitado && t.Especialidad == cola[0].Equipo.Tipo && t.CalcularCarga(datos.Solicitudes) < t.LimiteActivos)
+                {
+                    disponible = true;
+                }
+            }
+
+            if (!disponible)
+            {
+                Console.WriteLine("Frente bloqueado: no hay técnico habilitado de " + cola[0].Equipo.Tipo + " con cupo.");
+            }
+            else
+            {
+                Console.WriteLine("Hay técnico compatible con cupo para el frente.");
+            }
+        }
+
+        public void SolicitudesEnEspera()
+        {
+            Encabezado("SOLICITUDES EN ESPERA - FIFO");
+
+            MostrarCola("URGENTES", gestor.ObtenerColaUrgente());
+            MostrarCola("NORMALES", gestor.ObtenerColaNormal());
+
+            Console.WriteLine("Se atienden primero las urgentes; no se salta un frente bloqueado.");
+        }
+
+        public void SolicitudesPorSituacion()
+        {
+            Encabezado("SOLICITUDES POR SITUACIÓN");
+
+            string[] grupos = { "ACTIVAS", "ENTREGADAS", "CANCELADAS" };
+
+            for (int i = 0; i < grupos.Length; i++)
+            {
+                int cantidad = 0;
+                Console.WriteLine("\n" + grupos[i]);
+
+                foreach (SolicitudServicio s in datos.Solicitudes)
+                {
+                    if ((i == 0 && s.EsActiva()) || (i == 1 && s.Estado == "Entregada") || (i == 2 && s.Estado == "Cancelada"))
+                    {
+                        Console.WriteLine(s.Codigo + " | " + s.Cliente.NombreCompleto + " | " + s.Equipo.Codigo + " | " + s.Prioridad + " | " + s.Estado +  " | " + NombreTecnico(s) +  " | Q " + s.Total.ToString("F2"));
+
+                        cantidad++;
+                    }
+                }
+
+                Console.WriteLine("Total: " + cantidad);
+            }
+        }
+
+        public void DisponibilidadTecnicos()
+        {
+            Encabezado("DISPONIBILIDAD DE TÉCNICOS");
+
+            foreach (Tecnico t in datos.Tecnicos)
+            {
+                int carga = t.CalcularCarga(datos.Solicitudes);
+                string estado = "Disponible";
+
+                if (!t.Habilitado)
+                {
+                    estado = "Deshabilitado";
+                }
+                else if (carga >= t.LimiteActivos)
+                {
+                    estado = "Carga completa";
+                }
+
+                Console.WriteLine(t.Codigo + " | " + t.NombreCompleto + " | " + t.Especialidad + " | " + estado + " | Carga: " + carga + "/" + t.LimiteActivos + " | Cupos: " + (t.LimiteActivos - carga));
+            }
+
+            Console.WriteLine("Técnicos registrados: " + datos.Tecnicos.Count);
+        }
+
+        public void RankingTecnicos()
+        {
+            Encabezado("TÉCNICOS POR SERVICIOS ENTREGADOS - SELECCIÓN DESCENDENTE");
+
+            Tecnico[] copia = datos.Tecnicos.ToArray();
+            Algoritmos.Seleccion(copia, datos.Solicitudes, false);
+
+            int maximo = 0;
+
+            if (copia.Length > 0)
+            {
+                maximo = Algoritmos.ContarFinalizados(copia[0], datos.Solicitudes);
+            }
+
+            for (int i = 0; i < copia.Length; i++)
+            {
+                Tecnico t = copia[i];
+                string promedio = "Sin calificaciones";
+
+                if (t.PromedioCalificacion.HasValue)
+                {
+                    promedio = t.PromedioCalificacion.Value.ToString("F2");
+                }
+
+                Console.WriteLine((i + 1) + " | " + t.Codigo + " | " + t.NombreCompleto + " | Entregados: " + Algoritmos.ContarFinalizados(t, datos.Solicitudes) + " | Promedio: " + promedio);
+            }
+
+            if (maximo == 0)
+            {
+                Console.WriteLine("Aún no hay servicios entregados.");
+            }
+            else
+            {
+                Console.WriteLine("Líderes con " + maximo + " servicios:");
+
+                foreach (Tecnico t in copia)
+                {
+                    if (Algoritmos.ContarFinalizados(t, datos.Solicitudes) == maximo)
+                    {
+                        Console.WriteLine(t.Codigo + " - " + t.NombreCompleto);
+                    }
+                }
+            }
+        }
+
+        public void EquiposPorTipo()
+        {
+            Encabezado("EQUIPOS ATENDIDOS POR TIPO - SOLO ENTREGADAS");
+
+            string[] tipos = { "Portatil", "Escritorio", "Impresora" };
+
+            foreach (string tipo in tipos)
+            {
+                int servicios = 0;
+                List<string> equipos = new List<string>();
+
+                foreach (SolicitudServicio s in datos.Solicitudes)
+                {
+                    if (s.Estado == "Entregada" && s.Equipo.Tipo == tipo)
+                    {
+                        servicios++;
+
+                        if (!equipos.Contains(s.Equipo.Codigo))
+                        {
+                            equipos.Add(s.Equipo.Codigo);
+                        }
+                    }
+                }
+
+                Console.WriteLine(tipo + " | Equipos distintos: " + equipos.Count + " | Servicios: " + servicios);
+            }
+        }
+
+        public void SolicitudesOrdenadas(bool porCosto, bool ascendente)
+        {
+            SolicitudServicio[] copia = datos.Solicitudes.ToArray();
+
+            if (porCosto)
+            {
+                Encabezado("SOLICITUDES POR COSTO - BURBUJA");
+                Algoritmos.Burbuja(copia, ascendente);
+
+                Console.WriteLine("Código | Estado | Cliente | Mano de obra | Repuestos | Total");
+            }
+            else
+            {
+                Encabezado("SOLICITUDES POR FECHA DE RECEPCIÓN - QUICK SORT");
+                Algoritmos.QuickSort(copia, ascendente, false);
+
+                Console.WriteLine("Código | Recepción | Prioridad | Estado | Técnico");
+            }
+
+            if (ascendente)
+            {
+                Console.WriteLine("Orden ascendente");
+            }
+            else
+            {
+                Console.WriteLine("Orden descendente");
+            }
+
+            decimal suma = 0;
+
+            foreach (SolicitudServicio s in copia)
+            {
+                if (porCosto)
+                {
+                    Console.WriteLine(s.Codigo + " | " + s.Estado + " | " + s.Cliente.NombreCompleto + " | Q " + s.CostoManoObra.ToString("F2") + " | Q " + s.CostoRepuestos.ToString("F2") + " | Q " + s.Total.ToString("F2"));
+
+                    suma += s.Total;
+                }
+                else
+                {
+                    Console.WriteLine(s.Codigo + " | " + s.FechaRecepcion + " | " + s.Prioridad + " | " + s.Estado + " | " + NombreTecnico(s));
+                }
+            }
+
+            Console.WriteLine("Registros: " + copia.Length);
+
+            if (porCosto)
+            {
+                Console.WriteLine("Suma de importes: Q " + suma.ToString("F2"));
+                Console.WriteLine("Los importes de solicitudes activas son provisionales. " + "Esta suma no es ingreso.");
+            }
+        }
+
+        public void Inventario(bool soloMinimos)
+        {
+            Encabezado("INVENTARIO - SHELL POR EXISTENCIA ASCENDENTE");
+
+            Repuesto[] copia = datos.Repuestos.ToArray();
+            Algoritmos.Shell(copia, true);
+
+            int cantidad = 0;
+
+            foreach (Repuesto r in copia)
+            {
+                if (!soloMinimos || r.EstaEnMinimo())
+                {
+                    string alerta = "Disponible";
+
+                    if (r.Existencia == 0)
+                    {
+                        alerta = "Agotado";
+                    }
+                    else if (r.EstaEnMinimo())
+                    {
+                        alerta = "En mínimo o por debajo";
+                    }
+
+                    Console.WriteLine(r.Codigo + " | " + r.Nombre + " | " + r.Categoria + " | Existencia: " + r.Existencia + " | Mínimo: " + r.ExistenciaMinima + " | Precio: Q " + r.PrecioVenta.ToString("F2") + " | Utilizados: " + r.CantidadUtilizada + " | " + alerta);
+
+                    cantidad++;
+                }
+            }
+
+            Console.WriteLine("Registros: " + cantidad);
+
+            if (cantidad == 0)
+            {
+                Console.WriteLine("No hay repuestos que mostrar con este filtro.");
+            }
+        }
+
+        public void Ingresos()
+        {
+            Encabezado("INGRESOS POR SERVICIOS ENTREGADOS");
+
+            int cantidad = 0;
+            decimal manoObra = 0;
+            decimal repuestos = 0;
+
+            foreach (SolicitudServicio s in datos.Solicitudes)
+            {
+                if (s.Estado == "Entregada")
+                {
+                    Console.WriteLine(s.Codigo + " | " + s.FechaEntrega + " | " + s.Cliente.NombreCompleto + " | Mano de obra: Q " + s.CostoManoObra.ToString("F2") + " | Repuestos: Q " + s.CostoRepuestos.ToString("F2") + " | Total: Q " + s.Total.ToString("F2"));
+
+                    manoObra += s.CostoManoObra;
+                    repuestos += s.CostoRepuestos;
+                    cantidad++;
+                }
+            }
+
+            Console.WriteLine("Servicios entregados: " + cantidad);
+            Console.WriteLine("Mano de obra: Q " + manoObra.ToString("F2"));
+            Console.WriteLine("Repuestos: Q " + repuestos.ToString("F2"));
+            Console.WriteLine("Ingreso total: Q " + (manoObra + repuestos).ToString("F2"));
+
+            Console.WriteLine("Representa importes de servicios entregados; " + "no utilidad neta ni control de pagos.");
+        }
+
+        public int[,] ConstruirCargaSemanal(DateTime lunes)
+        {
+            lunes = lunes.Date;
+
+            if (lunes > DateTime.MaxValue.Date.AddDays(-5))
+            {
+                throw new ArgumentException("La semana excede el rango de fechas permitido.");
+            }
+
+            if (lunes.DayOfWeek != DayOfWeek.Monday)
+            {
+                throw new ArgumentException("La fecha inicial debe ser lunes.");
+            }
+
+            int[,] matriz = new int[datos.Tecnicos.Count, 6];
+
+            for (int fila = 0; fila < datos.Tecnicos.Count; fila++)
+            {
+                foreach (SolicitudServicio s in datos.Solicitudes)
+                {
+                    if (s.TecnicoAsignado == datos.Tecnicos[fila] && s.FechaAsignacion.HasValue)
+                    {
+                        int dia = (s.FechaAsignacion.Value.Date - lunes).Days;
+
+                        if (dia >= 0 && dia < 6)
+                        {
+                            matriz[fila, dia]++;
+                        }
+                    }
+                }
+            }
+
+            return matriz;
+        }
+
+        public void CargaSemanal(DateTime lunes)
+        {
+            lunes = lunes.Date;
+            int[,] matriz = ConstruirCargaSemanal(lunes);
+
+            string[] dias = { "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb" };
+
+            int[] totalesTecnicos = new int[datos.Tecnicos.Count];
+            int[] totalesDias = new int[6];
+
+            int total = 0;
+            int maxTecnico = 0;
+            int maxDia = 0;
+            int maxCelda = 0;
+
+            Encabezado("CARGA SEMANAL: " + lunes.ToString("dd/MM/yyyy") + " AL " + lunes.AddDays(5).ToString("dd/MM/yyyy"));
+
+            Console.WriteLine("Cantidad de solicitudes asignadas por día.");
+            Console.WriteLine("Técnico\tLun\tMar\tMié\tJue\tVie\tSáb\tTotal");
+
+            for (int fila = 0; fila < datos.Tecnicos.Count; fila++)
+            {
+                Console.Write(datos.Tecnicos[fila].Codigo);
+
+                for (int columna = 0; columna < 6; columna++)
+                {
+                    int valor = matriz[fila, columna];
+
+                    Console.Write("\t" + valor);
+
+                    totalesTecnicos[fila] += valor;
+                    totalesDias[columna] += valor;
+                    total += valor;
+
+                    if (valor > maxCelda)
+                    {
+                        maxCelda = valor;
+                    }
+                }
+
+                Console.WriteLine("\t" + totalesTecnicos[fila]);
+
+                if (totalesTecnicos[fila] > maxTecnico)
+                {
+                    maxTecnico = totalesTecnicos[fila];
+                }
+            }
+
+            Console.Write("Total");
+
+            for (int columna = 0; columna < 6; columna++)
+            {
+                Console.Write("\t" + totalesDias[columna]);
+
+                if (totalesDias[columna] > maxDia)
+                {
+                    maxDia = totalesDias[columna];
+                }
+            }
+
+            Console.WriteLine("\t" + total);
+
+            if (total == 0)
+            {
+                Console.WriteLine("No hay asignaciones registradas para esta semana.");
+                return;
+            }
+
+            Console.WriteLine("Técnicos con mayor carga: " + maxTecnico);
+
+            for (int fila = 0; fila < datos.Tecnicos.Count; fila++)
+            {
+                if (totalesTecnicos[fila] == maxTecnico)
+                {
+                    Console.WriteLine(datos.Tecnicos[fila].Codigo + " - " + datos.Tecnicos[fila].NombreCompleto);
+                }
+            }
+
+            Console.WriteLine("Días con mayor carga: " + maxDia);
+
+            for (int columna = 0; columna < 6; columna++)
+            {
+                if (totalesDias[columna] == maxDia)
+                {
+                    Console.WriteLine(dias[columna]);
+                }
+            }
+
+            Console.WriteLine("Mayor carga individual: " + maxCelda);
+
+            for (int fila = 0; fila < datos.Tecnicos.Count; fila++)
+            {
+                for (int columna = 0; columna < 6; columna++)
+                {
+                    if (matriz[fila, columna] == maxCelda)
+                    {
+                        Console.WriteLine(datos.Tecnicos[fila].Codigo + " | " + dias[columna]);
+                    }
+                }
+            }
+
+            Console.WriteLine("Incluye asignaciones conservadas de solicitudes " + "entregadas o canceladas.");
         }
     }
     internal class Program
