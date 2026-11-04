@@ -73,14 +73,33 @@ namespace Proyecto_XelaTech
 
             set
             {
-                if (!string.IsNullOrWhiteSpace(value))
-                {
-                    telefono = value.Trim();
-                }
-                else
+                if (string.IsNullOrWhiteSpace(value))
                 {
                     throw new ArgumentException("El teléfono no puede estar vacío.");
                 }
+
+                string texto = value.Trim();
+                string digitos = texto;
+
+                if (texto.StartsWith("+502"))
+                {
+                    digitos = texto.Substring(4);
+                }
+
+                if (digitos.Length != 8)
+                {
+                    throw new ArgumentException("Ingrese 8 dígitos, con +502 opcional al inicio.");
+                }
+
+                foreach (char caracter in digitos)
+                {
+                    if (caracter < '0' || caracter > '9')
+                    {
+                        throw new ArgumentException("El teléfono solo admite dígitos y el prefijo opcional +502.");
+                    }
+                }
+
+                telefono = texto;
             }
         }
 
@@ -94,14 +113,40 @@ namespace Proyecto_XelaTech
                 {
                     throw new ArgumentException("El correo no puede estar vacío.");
                 }
-                else if (!value.Contains("@"))
+
+                string texto = value.Trim();
+
+                foreach (char caracter in texto)
                 {
-                    throw new ArgumentException("El correo debe contener @.");
+                    if (char.IsWhiteSpace(caracter))
+                    {
+                        throw new ArgumentException("El correo no puede contener espacios.");
+                    }
                 }
-                else
+
+                int arroba = texto.IndexOf('@');
+                int punto = texto.LastIndexOf('.');
+
+                if (arroba <= 0 || arroba != texto.LastIndexOf('@') || punto <= arroba + 1 || punto == texto.Length - 1 || texto.StartsWith(".") || texto.Contains("..") || texto.Contains(".@"))
                 {
-                    correo = value.Trim();
+                    throw new ArgumentException("Ingrese un correo como nombre@dominio.com.");
                 }
+
+                try
+                {
+                    System.Net.Mail.MailAddress direccion = new System.Net.Mail.MailAddress(texto);
+
+                    if (direccion.Address != texto)
+                    {
+                        throw new ArgumentException("Ingrese solamente la dirección de correo.");
+                    }
+                }
+                catch (FormatException)
+                {
+                    throw new ArgumentException("El formato del correo no es válido.");
+                }
+
+                correo = texto;
             }
         }
 
@@ -1655,6 +1700,175 @@ namespace Proyecto_XelaTech
             return null;
         }
     }
+    public class GeneradorDatos
+    {
+        private DatosSistema datos;
+        private GestorAtencion gestor;
+        private Random random;
+
+        public GeneradorDatos(DatosSistema datos, GestorAtencion gestor)
+        {
+            if (datos == null || gestor == null)
+            {
+                throw new ArgumentException("Faltan los datos o el gestor.");
+            }
+
+            this.datos = datos;
+            this.gestor = gestor;
+            random = new Random();
+        }
+
+        public string Generar(int cantidad, int? semilla)
+        {
+            if (cantidad < 1 || cantidad > 50)
+            {
+                throw new ArgumentException("Genere entre 1 y 50 solicitudes por vez.");
+            }
+
+            if (semilla.HasValue)
+            {
+                random = new Random(semilla.Value);
+            }
+            else
+            {
+                random = new Random();
+            }
+
+            string[] nombres =
+            {
+                "Ana", "Carlos", "María", "Luis", "Sofía", "Pedro"
+            };
+
+            string[] tiposCliente =
+            {
+                "Estudiante", "Profesional", "Negocio", "Institucion"
+            };
+
+            string[] especialidades =
+            {
+                "Portatil", "Escritorio", "Impresora"
+            };
+
+            string[] repuestos =
+            {
+                "Memoria RAM", "Disco SSD", "Cartucho de tinta"
+            };
+
+            string[] categorias =
+            {
+                "Memoria", "Almacenamiento", "Consumible"
+            };
+
+            string[] marcas =
+            {
+                "HP", "Dell", "Epson"
+            };
+
+            string[] problemas =
+            {
+                "No enciende",
+                "Se apaga durante el uso", 
+                "Funcionamiento intermitente"
+            };
+
+            for (int i = 0; i < especialidades.Length; i++)
+            {
+                string codigo = datos.GenerarCodigo("TEC");
+
+                Tecnico tecnico = new Tecnico(codigo, "Técnico de prueba " + codigo, especialidades[i]);
+
+                gestor.RegistrarTecnico(tecnico);
+            }
+
+            for (int i = 0; i < repuestos.Length; i++)
+            {
+                decimal costo = random.Next(25, 201);
+                decimal precio = costo + random.Next(10, 76);
+
+                Repuesto repuesto = new Repuesto(datos.GenerarCodigo("REP"), repuestos[i], categorias[i], random.Next(5, 21), random.Next(1, 5), costo, precio);
+
+                gestor.RegistrarRepuesto(repuesto);
+            }
+
+            int urgentes = 0;
+            int normales = 0;
+            string primerCodigo = "";
+            string ultimoCodigo = "";
+
+            for (int i = 0; i < cantidad; i++)
+            {
+
+                string codigoCliente = datos.GenerarCodigo("CLI");
+
+                Cliente cliente = new Cliente(codigoCliente, nombres[random.Next(nombres.Length)] + " Prueba " + codigoCliente, random.Next(20000000, 80000000).ToString(), codigoCliente.ToLowerInvariant() + "@ejemplo.com", tiposCliente[random.Next(tiposCliente.Length)]);
+
+                gestor.RegistrarCliente(cliente);
+
+                string codigoEquipo = datos.GenerarCodigo("EQU");
+                string serieBase = "PRUEBA-" + codigoEquipo;
+                string serie = serieBase;
+                int intento = 1;
+
+                while (gestor.BuscarEquipoPorSerie(serie) != null)
+                {
+                    serie = serieBase + "-" + intento;
+                    intento++;
+                }
+
+                List<string> accesorios = new List<string>();
+                Equipo equipo;
+                int tipoEquipo = random.Next(3);
+
+                if (tipoEquipo == 0)
+                {
+                    accesorios.Add("Cargador");
+
+                    equipo = new Portatil(codigoEquipo, serie, marcas[random.Next(2)], "Modelo de prueba", cliente, "Sin golpes visibles", accesorios);
+                }
+                else if (tipoEquipo == 1)
+                {
+                    accesorios.Add("Cable de corriente");
+
+                    equipo = new Escritorio(codigoEquipo, serie, marcas[random.Next(2)], "Modelo de prueba", cliente, "Sin golpes visibles", accesorios, "Torre");
+                }
+                else
+                {
+                    accesorios.Add("Cable USB");
+
+                    equipo = new Impresora(codigoEquipo, serie, marcas[2], "Modelo de prueba", cliente, "Sin golpes visibles", accesorios, "Inyección de tinta");
+                }
+
+                gestor.RegistrarEquipo(equipo);
+
+                string prioridad = "Normal";
+
+                if (random.Next(2) == 1)
+                {
+                    prioridad = "Urgente";
+                }
+
+                SolicitudServicio solicitud = gestor.CrearSolicitud(cliente.Codigo, equipo.Codigo, problemas[random.Next(problemas.Length)], prioridad);
+
+                if (i == 0)
+                {
+                    primerCodigo = solicitud.Codigo;
+                }
+
+                ultimoCodigo = solicitud.Codigo;
+
+                if (prioridad == "Urgente")
+                {
+                    urgentes++;
+                }
+                else
+                {
+                    normales++;
+                }
+            }
+
+            return "Clientes creados: " + cantidad + "\nTécnicos creados: 3" + "\nRepuestos creados: 3" + "\nEquipos creados: " + cantidad + "\nSolicitudes creadas: " + cantidad + "\nUrgentes: " + urgentes + "\nNormales: " + normales + "\nPrimera solicitud: " + primerCodigo + "\nÚltima solicitud: " + ultimoCodigo + "\nLas solicitudes quedaron en espera. " + "Atiéndalas desde el menú de colas.";
+        }
+    }
     public class MenuConsola
     {
         private DatosSistema datos;
@@ -1690,9 +1904,10 @@ namespace Proyecto_XelaTech
                 Console.WriteLine("7. Ordenamientos");
                 Console.WriteLine("8. Búsquedas");
                 Console.WriteLine("9. Reportes");
+                Console.WriteLine("10. Generar datos de prueba");
                 Console.WriteLine("0. Salir");
 
-                opcion = LeerEntero("Seleccione una opción: ", 0, 9);
+                opcion = LeerEntero("Seleccione una opción: ", 0, 10);
 
                 switch (opcion)
                 {
@@ -1722,6 +1937,9 @@ namespace Proyecto_XelaTech
                         break;
                     case 9:
                         MenuReportes();
+                        break;
+                    case 10:
+                        GenerarDatosPrueba();
                         break;
                     case 0:
                         Console.WriteLine("Saliendo del programa...");
@@ -2056,6 +2274,40 @@ namespace Proyecto_XelaTech
                 Pausar();
 
             } while (opcion != 0);
+        }
+        private void GenerarDatosPrueba()
+        {
+            Console.Clear();
+            Console.WriteLine("GENERAR DATOS DE PRUEBA");
+            Console.WriteLine("Cada solicitud tendrá un cliente y un equipo nuevos.");
+            Console.WriteLine("También se agregarán 3 técnicos y 3 repuestos.");
+            Console.WriteLine("Los registros existentes se conservarán.");
+
+            int cantidad = LeerEntero("Cantidad de solicitudes (1 a 50): ", 1, 50);
+
+            int? semilla = null;
+
+            int opcion = LeerEntero("1. Aleatorio / 2. Elegir semilla: ", 1, 2);
+
+            if (opcion == 2)
+            {
+                semilla = LeerEntero("Semilla (0 a 1000000): ", 0, 1000000);
+            }    
+
+            try
+            {
+                GeneradorDatos generador = new GeneradorDatos(datos, gestor);
+
+                Console.WriteLine(generador.Generar(cantidad, semilla));
+            }
+            catch (ArgumentException error)
+            {
+                Console.WriteLine("No se completó la generación: " + error.Message);
+
+                Console.WriteLine("Los registros creados antes del error permanecen guardados en memoria.");
+            }
+
+            Pausar();
         }
         private void MenuClientes()
         {
