@@ -418,7 +418,7 @@ namespace Proyecto_XelaTech
 
         public Portatil(string codigo, string numeroSerie, string marca, string modelo, Cliente propietario, string estadoFisico, List<string> accesorios) : base(codigo, numeroSerie, marca, modelo, propietario, estadoFisico, accesorios)
         {
-            
+
         }
 
         private bool TieneCargador()
@@ -1166,7 +1166,7 @@ namespace Proyecto_XelaTech
                 }
             }
 
-            SolicitudServicio solicitud = new SolicitudServicio(datos.GenerarCodigo("SOL"),cliente, equipo, problema, prioridad, datos.Solicitudes.Count + 1);
+            SolicitudServicio solicitud = new SolicitudServicio(datos.GenerarCodigo("SOL"), cliente, equipo, problema, prioridad, datos.Solicitudes.Count + 1);
 
             solicitud.PasarAEspera(datos.GenerarCodigo("CAM"));
             datos.Solicitudes.Add(solicitud);
@@ -1380,6 +1380,281 @@ namespace Proyecto_XelaTech
             }
         }
     }
+    public static class Algoritmos
+    {
+        private static string Normalizar(string texto)
+        {
+            if (texto == null || texto.Trim() == "")
+            {
+                throw new ArgumentException("Ingrese un texto para buscar.");
+            }
+
+            return texto.Trim().ToUpperInvariant();
+        }
+
+        public static List<Cliente> BuscarClientes(List<Cliente> clientes, string texto)
+        {
+            string filtro = Normalizar(texto);
+            List<Cliente> resultado = new List<Cliente>();
+
+            foreach (Cliente cliente in clientes)
+            {
+                if (Normalizar(cliente.NombreCompleto).Contains(filtro))
+                {
+                    resultado.Add(cliente);
+                }
+            }
+
+            return resultado;
+        }
+
+        public static List<SolicitudServicio> BuscarPorEstado(List<SolicitudServicio> solicitudes, string estado)
+        {
+            string filtro = Normalizar(estado);
+            List<SolicitudServicio> resultado = new List<SolicitudServicio>();
+
+            foreach (SolicitudServicio solicitud in solicitudes)
+            {
+                if (Normalizar(solicitud.Estado) == filtro)
+                {
+                    resultado.Add(solicitud);
+                }
+            }
+
+            return resultado;
+        }
+
+        public static List<Equipo> BuscarEquipos(List<Equipo> equipos, string marca)
+        {
+            string filtro = Normalizar(marca);
+            List<Equipo> resultado = new List<Equipo>();
+
+            foreach (Equipo equipo in equipos)
+            {
+                if (Normalizar(equipo.Marca).Contains(filtro))
+                {
+                    resultado.Add(equipo);
+                }
+            }
+
+            return resultado;
+        }
+
+        public static int ContarFinalizados(Tecnico tecnico, List<SolicitudServicio> solicitudes)
+        {
+            int cantidad = 0;
+
+            foreach (SolicitudServicio solicitud in solicitudes)
+            {
+                if (solicitud.TecnicoAsignado == tecnico && solicitud.Estado == "Entregada")
+                {
+                    cantidad++;
+                }
+            }
+
+            return cantidad;
+        }
+
+        private static bool FueraDeOrden(decimal primero, decimal segundo, bool ascendente)
+        {
+            if (ascendente)
+            {
+                return primero > segundo;
+            }
+
+            return primero < segundo;
+        }
+
+        public static void Burbuja(SolicitudServicio[] arreglo, bool ascendente)
+        {
+            for (int i = 0; i < arreglo.Length - 1; i++)
+            {
+                bool cambio = false;
+
+                for (int j = 0; j < arreglo.Length - 1 - i; j++)
+                {
+                    if (FueraDeOrden(arreglo[j].Total, arreglo[j + 1].Total, ascendente))
+                    {
+                        SolicitudServicio temporal = arreglo[j];
+                        arreglo[j] = arreglo[j + 1];
+                        arreglo[j + 1] = temporal;
+                        cambio = true;
+                    }
+                }
+
+                if (!cambio)
+                {
+                    break;
+                }
+            }
+        }
+
+        public static void Seleccion(Tecnico[] arreglo, List<SolicitudServicio> solicitudes, bool ascendente)
+        {
+            int[] cantidades = new int[arreglo.Length];
+
+            for (int i = 0; i < arreglo.Length; i++)
+            {
+                cantidades[i] = ContarFinalizados(arreglo[i], solicitudes);
+            }
+
+            for (int i = 0; i < arreglo.Length - 1; i++)
+            {
+                int elegido = i;
+
+                for (int j = i + 1; j < arreglo.Length; j++)
+                {
+                    if (FueraDeOrden(cantidades[elegido], cantidades[j], ascendente))
+                    {
+                        elegido = j;
+                    }
+                }
+
+                Tecnico temporal = arreglo[i];
+                arreglo[i] = arreglo[elegido];
+                arreglo[elegido] = temporal;
+
+                int cantidadTemporal = cantidades[i];
+                cantidades[i] = cantidades[elegido];
+                cantidades[elegido] = cantidadTemporal;
+            }
+        }
+
+        public static void Shell(Repuesto[] arreglo, bool ascendente)
+        {
+            int salto = arreglo.Length / 2;
+
+            while (salto > 0)
+            {
+                for (int i = salto; i < arreglo.Length; i++)
+                {
+                    Repuesto temporal = arreglo[i];
+                    int j = i;
+
+                    while (j >= salto && FueraDeOrden(arreglo[j - salto].Existencia, temporal.Existencia, ascendente))
+                    {
+                        arreglo[j] = arreglo[j - salto];
+                        j = j - salto;
+                    }
+
+                    arreglo[j] = temporal;
+                }
+
+                salto = salto / 2;
+            }
+        }
+
+        private static int Comparar(SolicitudServicio primera, SolicitudServicio segunda, bool porCodigo)
+        {
+            if (porCodigo)
+            {
+                return string.CompareOrdinal(Normalizar(primera.Codigo), Normalizar(segunda.Codigo));
+            }
+
+            return DateTime.Compare(primera.FechaRecepcion, segunda.FechaRecepcion);
+        }
+
+        public static void QuickSort(SolicitudServicio[] arreglo, bool ascendente, bool porCodigo)
+        {
+            if (arreglo.Length < 2)
+            {
+                return;
+            }
+
+            QuickSort(arreglo, 0, arreglo.Length - 1, ascendente, porCodigo);
+        }
+
+        private static void QuickSort(SolicitudServicio[] arreglo, int izquierda, int derecha, bool ascendente, bool porCodigo)
+        {
+            int i = izquierda;
+            int j = derecha;
+
+            SolicitudServicio pivote = arreglo[izquierda + (derecha - izquierda) / 2];
+
+            while (i <= j)
+            {
+                while (i <= derecha && FueraDeOrden(0, Comparar(arreglo[i], pivote, porCodigo), ascendente))
+                {
+                    i++;
+                }
+
+                while (j >= izquierda && FueraDeOrden(Comparar(arreglo[j], pivote, porCodigo), 0, ascendente))
+                {
+                    j--;
+                }
+
+                if (i <= j)
+                {
+                    SolicitudServicio temporal = arreglo[i];
+                    arreglo[i] = arreglo[j];
+                    arreglo[j] = temporal;
+
+                    i++;
+                    j--;
+                }
+            }
+
+            if (izquierda < j)
+            {
+                QuickSort(arreglo, izquierda, j, ascendente, porCodigo);
+            }
+
+            if (i < derecha)
+            {
+                QuickSort(arreglo, i, derecha, ascendente, porCodigo);
+            }
+        }
+
+        public static SolicitudServicio PrepararBusquedaCodigo(List<SolicitudServicio> solicitudes, string codigo)
+        {
+            string buscado = Normalizar(codigo);
+
+            SolicitudServicio[] copia = solicitudes.ToArray();
+
+            QuickSort(copia, true, true);
+
+            return BusquedaBinaria(copia, buscado);
+        }
+
+        public static SolicitudServicio BusquedaBinaria(SolicitudServicio[] arreglo, string codigo)
+        {
+            string buscado = Normalizar(codigo);
+
+            for (int i = 1; i < arreglo.Length; i++)
+            {
+                if (string.CompareOrdinal(Normalizar(arreglo[i - 1].Codigo), Normalizar(arreglo[i].Codigo)) > 0)
+                {
+                    throw new ArgumentException("Primero ordene los códigos de forma ascendente.");
+                }
+            }
+
+            int inicio = 0;
+            int fin = arreglo.Length - 1;
+
+            while (inicio <= fin)
+            {
+                int centro = inicio + (fin - inicio) / 2;
+
+                int comparacion = string.CompareOrdinal(Normalizar(arreglo[centro].Codigo), buscado);
+
+                if (comparacion == 0)
+                {
+                    return arreglo[centro];
+                }
+
+                if (comparacion < 0)
+                {
+                    inicio = centro + 1;
+                }
+                else
+                {
+                    fin = centro - 1;
+                }
+            }
+
+            return null;
+        }
+    }
     public class MenuConsola
     {
         private DatosSistema datos;
@@ -1412,9 +1687,11 @@ namespace Proyecto_XelaTech
                 Console.WriteLine("4. Gestión de repuestos");
                 Console.WriteLine("5. Solicitudes de servicio");
                 Console.WriteLine("6. Colas de atención");
+                Console.WriteLine("7. Ordenamientos");
+                Console.WriteLine("8. Búsquedas");
                 Console.WriteLine("0. Salir");
 
-                opcion = LeerEntero("Seleccione una opción: ", 0, 6);
+                opcion = LeerEntero("Seleccione una opción: ", 0, 8);
 
                 switch (opcion)
                 {
@@ -1436,6 +1713,12 @@ namespace Proyecto_XelaTech
                     case 6:
                         MenuColas();
                         break;
+                    case 7:
+                        MenuOrdenamientos();
+                        break;
+                    case 8:
+                        MenuBusquedas();
+                        break;
                     case 0:
                         Console.WriteLine("Saliendo del programa...");
                         break;
@@ -1443,7 +1726,209 @@ namespace Proyecto_XelaTech
 
             } while (opcion != 0);
         }
+        private void MenuOrdenamientos()
+        {
+            int opcion;
 
+            do
+            {
+                Console.Clear();
+                Console.WriteLine("ORDENAMIENTOS");
+                Console.WriteLine("1. Costo total - Burbuja");
+                Console.WriteLine("2. Servicios entregados por técnico - Selección");
+                Console.WriteLine("3. Existencias - Shell");
+                Console.WriteLine("4. Fecha de recepción - Quick Sort");
+                Console.WriteLine("0. Volver");
+
+                opcion = LeerEntero("Opción: ", 0, 4);
+
+                if (opcion == 0)
+                    return;
+
+                int sentido = LeerEntero(
+                    "1. Ascendente / 2. Descendente: ", 1, 2);
+
+                bool ascendente = sentido == 1;
+
+                if (ascendente)
+                    Console.WriteLine("Orden: ascendente");
+                else
+                    Console.WriteLine("Orden: descendente");
+
+                int cantidad = 0;
+
+                if (opcion == 1 || opcion == 4)
+                {
+                    SolicitudServicio[] copia = datos.Solicitudes.ToArray();
+
+                    if (opcion == 1)
+                    {
+                        Algoritmos.Burbuja(copia, ascendente);
+                        Console.WriteLine("Burbuja: costo total");
+                    }
+                    else
+                    {
+                        Algoritmos.QuickSort(copia, ascendente, false);
+                        Console.WriteLine("Quick Sort: fecha de recepción");
+                    }
+
+                    cantidad = copia.Length;
+
+                    foreach (SolicitudServicio solicitud in copia)
+                    {
+                        Console.WriteLine(
+                            solicitud.Codigo + " | " +
+                            solicitud.FechaRecepcion.ToString("dd/MM/yyyy HH:mm:ss") +
+                            " | " + solicitud.Estado +
+                            " | Q " + solicitud.Total.ToString("F2"));
+                    }
+                }
+                else if (opcion == 2)
+                {
+                    Tecnico[] copia = datos.Tecnicos.ToArray();
+
+                    Algoritmos.Seleccion(copia, datos.Solicitudes, ascendente);
+
+                    Console.WriteLine("Selección: servicios entregados");
+                    cantidad = copia.Length;
+
+                    foreach (Tecnico tecnico in copia)
+                    {
+                        Console.WriteLine(
+                            tecnico.Codigo + " | " + tecnico.NombreCompleto +
+                            " | Entregados: " +
+                            Algoritmos.ContarFinalizados(tecnico, datos.Solicitudes));
+                    }
+                }
+                else
+                {
+                    Repuesto[] copia = datos.Repuestos.ToArray();
+
+                    Algoritmos.Shell(copia, ascendente);
+
+                    Console.WriteLine("Shell: existencia");
+                    cantidad = copia.Length;
+
+                    foreach (Repuesto repuesto in copia)
+                    {
+                        Console.WriteLine(
+                            repuesto.Codigo + " | " + repuesto.Nombre +
+                            " | Existencia: " + repuesto.Existencia);
+                    }
+                }
+
+                Console.WriteLine("Registros: " + cantidad);
+
+                if (cantidad == 0)
+                    Console.WriteLine("No hay datos para ordenar.");
+
+                Pausar();
+
+            } while (opcion != 0);
+        }
+
+        private void MenuBusquedas()
+        {
+            int opcion;
+
+            do
+            {
+                Console.Clear();
+                Console.WriteLine("BÚSQUEDAS");
+                Console.WriteLine("1. Clientes por nombre - Secuencial");
+                Console.WriteLine("2. Solicitudes por estado - Secuencial");
+                Console.WriteLine("3. Equipos por marca - Secuencial");
+                Console.WriteLine("4. Solicitud por código - Binaria");
+                Console.WriteLine("0. Volver");
+
+                opcion = LeerEntero("Opción: ", 0, 4);
+
+                if (opcion == 0)
+                {
+                    return;
+                }
+
+                int cantidad = 0;
+
+                if (opcion == 1)
+                {
+                    string texto = LeerTexto("Nombre o parte del nombre: ");
+
+                    List<Cliente> encontrados = Algoritmos.BuscarClientes(datos.Clientes, texto);
+
+                    Console.WriteLine("Búsqueda secuencial. Nombre: " + texto);
+                    cantidad = encontrados.Count;
+
+                    foreach (Cliente cliente in encontrados)
+                    {
+                        Console.WriteLine(cliente.Codigo + " | " + cliente.NombreCompleto + " | " + cliente.Telefono);
+                    }
+                }
+                else if (opcion == 2)
+                {
+                    string[] estados =
+                    {
+                        "Recibida", "EnEspera", "Asignada", "EnDiagnostico", "EnReparacion", "ListaParaEntregar", "Entregada", "Cancelada"
+                    };
+
+                    for (int i = 0; i < estados.Length; i++)
+                    {
+                        Console.WriteLine((i + 1) + ". " + estados[i]);
+                    }
+
+                    int seleccion = LeerEntero("Estado: ", 1, estados.Length);
+                    string estado = estados[seleccion - 1];
+
+                    List<SolicitudServicio> encontrados = Algoritmos.BuscarPorEstado(datos.Solicitudes, estado);
+
+                    Console.WriteLine("Búsqueda secuencial. Estado: " + estado);
+                    cantidad = encontrados.Count;
+
+                    foreach (SolicitudServicio solicitud in encontrados)
+                    {
+                        MostrarSolicitud(solicitud);
+                    }
+                }
+                else if (opcion == 3)
+                {
+                    string marca = LeerTexto("Marca o parte de la marca: ");
+
+                    List<Equipo> encontrados = Algoritmos.BuscarEquipos(datos.Equipos, marca);
+
+                    Console.WriteLine("Búsqueda secuencial. Marca: " + marca);
+                    cantidad = encontrados.Count;
+
+                    foreach (Equipo equipo in encontrados)
+                    {
+                        MostrarEquipo(equipo);
+                    }
+                }
+                else
+                {
+                    string codigo = LeerTexto("Código de solicitud: ");
+
+                    SolicitudServicio encontrada = Algoritmos.PrepararBusquedaCodigo(datos.Solicitudes, codigo);
+
+                    Console.WriteLine("Búsqueda binaria. Código: " + codigo);
+
+                    if (encontrada != null)
+                    {
+                        cantidad = 1;
+                        MostrarSolicitud(encontrada);
+                    }
+                }
+
+                Console.WriteLine("Coincidencias: " + cantidad);
+
+                if (cantidad == 0)
+                {
+                    Console.WriteLine("No se encontraron coincidencias.");
+                }
+
+                Pausar();
+
+            } while (opcion != 0);
+        }
         private void MenuClientes()
         {
             int opcion;
@@ -1883,7 +2368,7 @@ namespace Proyecto_XelaTech
             Console.WriteLine("Nombre actualizado correctamente.");
             Console.WriteLine("Nombre: " + tecnico.NombreCompleto);
         }
-        
+
         private void MenuEquipos()
         {
             int opcion;
@@ -3002,7 +3487,7 @@ namespace Proyecto_XelaTech
             GuardarCambio(codigoCambio, destino);
         }
 
-        internal void RegistrarDiagnostico(string codigo,string hallazgos, int minutos)
+        internal void RegistrarDiagnostico(string codigo, string hallazgos, int minutos)
         {
             ExigirActiva();
 
@@ -3074,7 +3559,7 @@ namespace Proyecto_XelaTech
         {
             ExigirActiva();
 
-            if (estado != "ListaParaEntregar" ||tecnicoAsignado == null || fechaAsignacion == null)
+            if (estado != "ListaParaEntregar" || tecnicoAsignado == null || fechaAsignacion == null)
             {
                 throw new ArgumentException("La solicitud debe estar lista para entregar.");
             }
@@ -3131,7 +3616,7 @@ namespace Proyecto_XelaTech
                 throw new ArgumentException("El historial no coincide con el estado actual.");
             }
 
-            if (estado == "EnReparacion" && (detalles.Count > 0 ||(diagnostico != null && diagnostico.Acciones.Count > 0)))
+            if (estado == "EnReparacion" && (detalles.Count > 0 || (diagnostico != null && diagnostico.Acciones.Count > 0)))
             {
                 throw new ArgumentException("No puede volver a diagnóstico si ya hay acciones o repuestos usados.");
             }
