@@ -195,6 +195,18 @@ namespace Proyecto_XelaTech
         {
             return "Cliente";
         }
+        public int ContarSolicitudes(List<SolicitudServicio> solicitudes)
+        {
+            int cantidad = 0;
+
+            foreach (SolicitudServicio solicitud in solicitudes)
+            {
+                if (solicitud.Cliente == this)
+                    cantidad++;
+            }
+
+            return cantidad;
+        }
     }
     public class Tecnico : Persona
     {
@@ -1512,6 +1524,10 @@ namespace Proyecto_XelaTech
 
         public static void Burbuja(SolicitudServicio[] arreglo, bool ascendente)
         {
+            if (arreglo.Length < 2)
+            {
+                return;
+            }
             for (int i = 0; i < arreglo.Length - 1; i++)
             {
                 bool cambio = false;
@@ -1536,6 +1552,10 @@ namespace Proyecto_XelaTech
 
         public static void Seleccion(Tecnico[] arreglo, List<SolicitudServicio> solicitudes, bool ascendente)
         {
+            if (arreglo.Length < 2)
+            {
+                return;
+            }
             int[] cantidades = new int[arreglo.Length];
 
             for (int i = 0; i < arreglo.Length; i++)
@@ -1567,6 +1587,10 @@ namespace Proyecto_XelaTech
 
         public static void Shell(Repuesto[] arreglo, bool ascendente)
         {
+            if (arreglo.Length < 2)
+            {
+                return;
+            }
             int salto = arreglo.Length / 2;
 
             while (salto > 0)
@@ -1942,7 +1966,19 @@ namespace Proyecto_XelaTech
                         GenerarDatosPrueba();
                         break;
                     case 0:
-                        Console.WriteLine("Saliendo del programa...");
+                        Console.WriteLine("Los datos están en memoria y se perderán al cerrar.");
+
+                        int confirmarSalida = LeerEntero("¿Salir? 1 Sí / 2 No: ", 1, 2);
+
+                        if (confirmarSalida == 1)
+                        {
+                            Console.WriteLine("Saliendo del programa...");
+                        }
+                        else
+                        {
+                            opcion = -1;
+                        }
+
                         break;
                 }
 
@@ -2016,10 +2052,7 @@ namespace Proyecto_XelaTech
 
                     foreach (Tecnico tecnico in copia)
                     {
-                        Console.WriteLine(
-                            tecnico.Codigo + " | " + tecnico.NombreCompleto +
-                            " | Entregados: " +
-                            Algoritmos.ContarFinalizados(tecnico, datos.Solicitudes));
+                        Console.WriteLine(tecnico.Codigo + " | " + tecnico.NombreCompleto + " | Entregados: " + Algoritmos.ContarFinalizados(tecnico, datos.Solicitudes));
                     }
                 }
                 else
@@ -2033,9 +2066,7 @@ namespace Proyecto_XelaTech
 
                     foreach (Repuesto repuesto in copia)
                     {
-                        Console.WriteLine(
-                            repuesto.Codigo + " | " + repuesto.Nombre +
-                            " | Existencia: " + repuesto.Existencia);
+                        Console.WriteLine(repuesto.Codigo + " | " + repuesto.Nombre + " | Existencia: " + repuesto.Existencia);
                     }
                 }
 
@@ -2428,6 +2459,7 @@ namespace Proyecto_XelaTech
                 Console.WriteLine("Teléfono: " + cliente.Telefono);
                 Console.WriteLine("Correo: " + cliente.Correo);
                 Console.WriteLine("Tipo: " + cliente.Tipo);
+                Console.WriteLine("Solicitudes registradas: " + cliente.ContarSolicitudes(datos.Solicitudes));
                 Console.WriteLine("--------------------------------");
             }
 
@@ -2632,6 +2664,9 @@ namespace Proyecto_XelaTech
                 }
 
                 Console.WriteLine("Límite de trabajos activos: " + tecnico.LimiteActivos);
+                Console.WriteLine("Trabajos activos: " + tecnico.CalcularCarga(datos.Solicitudes));
+
+                Console.WriteLine("Servicios entregados: " + Algoritmos.ContarFinalizados(tecnico, datos.Solicitudes));
 
                 if (tecnico.PromedioCalificacion == null)
                 {
