@@ -841,6 +841,40 @@ namespace Proyecto_XelaTech
                     return true;
                 }
             }
+            foreach (SolicitudServicio solicitud in solicitudes)
+            {
+                if (solicitud.Diagnostico != null)
+                {
+                    if (solicitud.Diagnostico.Codigo.ToUpper() == codigoBuscado)
+                    {
+                        return true;
+                    }
+
+                    foreach (AccionRealizada accion in solicitud.Diagnostico.Acciones)
+                    {
+                        if (accion.Codigo.ToUpper() == codigoBuscado)
+                        {
+                            return true;
+                        }
+                    }
+                }
+
+                foreach (DetalleRepuesto detalle in solicitud.Detalles)
+                {
+                    if (detalle.Codigo.ToUpper() == codigoBuscado)
+                    {
+                        return true;
+                    }
+                }
+
+                foreach (CambioEstado cambio in solicitud.ObtenerHistorial())
+                {
+                    if (cambio.Codigo.ToUpper() == codigoBuscado)
+                    {
+                        return true;
+                    }
+                }
+            }
             return false;
         }
     }
@@ -1132,10 +1166,9 @@ namespace Proyecto_XelaTech
                 }
             }
 
-            SolicitudServicio solicitud = new SolicitudServicio(datos.GenerarCodigo("SOL"),cliente, equipo, problema, prioridad, datos.Solicitudes.Count + 1
-            );
+            SolicitudServicio solicitud = new SolicitudServicio(datos.GenerarCodigo("SOL"),cliente, equipo, problema, prioridad, datos.Solicitudes.Count + 1);
 
-            solicitud.PasarAEspera();
+            solicitud.PasarAEspera(datos.GenerarCodigo("CAM"));
             datos.Solicitudes.Add(solicitud);
 
             if (prioridad == "Urgente")
@@ -1205,10 +1238,146 @@ namespace Proyecto_XelaTech
                 throw new ArgumentException("La solicitud " + solicitud.Codigo + " sigue en cola: no hay técnico habilitado de " + solicitud.Equipo.Tipo + " con cupo disponible.");
             }
 
-            solicitud.AsignarTecnico(elegido);
+            solicitud.AsignarTecnico(elegido, datos.GenerarCodigo("CAM"));
             cola.Dequeue();
 
             return solicitud;
+        }
+        public SolicitudServicio BuscarSolicitudPorCodigo(string codigo)
+        {
+            if (string.IsNullOrWhiteSpace(codigo))
+            {
+                throw new ArgumentException("El código de solicitud es obligatorio.");
+            }
+
+            string buscado = codigo.Trim().ToUpper();
+
+            foreach (SolicitudServicio solicitud in datos.Solicitudes)
+            {
+                if (solicitud.Codigo.ToUpper() == buscado)
+                {
+                    return solicitud;
+                }
+            }
+
+            return null;
+        }
+
+        private SolicitudServicio ExigirSolicitud(string codigo)
+        {
+            SolicitudServicio solicitud = BuscarSolicitudPorCodigo(codigo);
+
+            if (solicitud == null)
+            {
+                throw new ArgumentException("La solicitud no existe.");
+            }
+
+            return solicitud;
+        }
+
+        public void CambiarEstado(string codigo, string destino)
+        {
+            SolicitudServicio solicitud = ExigirSolicitud(codigo);
+
+            solicitud.CambiarEstado(destino, datos.GenerarCodigo("CAM"));
+
+            ReconstruirColas();
+        }
+
+        public void RegistrarDiagnostico(string codigo, string hallazgos, int minutos)
+        {
+            SolicitudServicio solicitud = ExigirSolicitud(codigo);
+
+            string codigoDiagnostico;
+
+            if (solicitud.Diagnostico == null)
+            {
+                codigoDiagnostico = datos.GenerarCodigo("DIA");
+            }
+            else
+            {
+                codigoDiagnostico = solicitud.Diagnostico.Codigo;
+            }
+
+            solicitud.RegistrarDiagnostico(codigoDiagnostico, hallazgos, minutos);
+        }
+
+        public void RegistrarAccion(string codigo, string descripcion)
+        {
+            ExigirSolicitud(codigo).RegistrarAccion(datos.GenerarCodigo("ACC"), descripcion);
+        }
+
+        public void UsarRepuesto(string codigo, string codigoRepuesto, int cantidad)
+        {
+            SolicitudServicio solicitud = ExigirSolicitud(codigo);
+            Repuesto repuesto = BuscarRepuestoPorCodigo(codigoRepuesto);
+
+            if (repuesto == null)
+            {
+                throw new ArgumentException("El repuesto no existe.");
+            }
+
+            solicitud.UsarRepuesto(datos.GenerarCodigo("DET"), repuesto, cantidad);
+        }
+
+        public void RegistrarManoObra(string codigo, decimal importe)
+        {
+            ExigirSolicitud(codigo).RegistrarManoObra(importe);
+        }
+
+        public void Entregar(string codigo, int? nota)
+        {
+            ExigirSolicitud(codigo).Entregar(datos.GenerarCodigo("CAM"), nota);
+        }
+
+        public void Cancelar(string codigo, string motivo)
+        {
+            ExigirSolicitud(codigo).Cancelar(datos.GenerarCodigo("CAM"), motivo);
+
+            ReconstruirColas();
+        }
+
+        public void DeshacerEstado(string codigo)
+        {
+            ExigirSolicitud(codigo).DeshacerEstado();
+            ReconstruirColas();
+        }
+
+        private void ReconstruirColas()
+        {
+            SolicitudServicio[] copia = datos.Solicitudes.ToArray();
+
+            for (int i = 1; i < copia.Length; i++)
+            {
+                SolicitudServicio temporal = copia[i];
+                int j = i - 1;
+
+                while (j >= 0 && copia[j].OrdenLlegada > temporal.OrdenLlegada)
+                {
+                    copia[j + 1] = copia[j];
+                    j--;
+                }
+
+                copia[j + 1] = temporal;
+            }
+
+            colaUrgente.Clear();
+            colaNormal.Clear();
+
+            foreach (SolicitudServicio solicitud in copia)
+            {
+                if (solicitud.Estado == "EnEspera")
+                {
+                    if (solicitud.Prioridad == "Urgente")
+                    {
+                        colaUrgente.Enqueue(solicitud);
+                    }
+                    else
+                    {
+                        colaNormal.Enqueue(solicitud);
+                    }
+                }
+            }
         }
     }
     public class MenuConsola
@@ -2093,28 +2262,43 @@ namespace Proyecto_XelaTech
                 Console.WriteLine("SOLICITUDES DE SERVICIO");
                 Console.WriteLine("1. Crear solicitud");
                 Console.WriteLine("2. Mostrar solicitudes");
+                Console.WriteLine("3. Iniciar diagnóstico");
+                Console.WriteLine("4. Registrar o actualizar diagnóstico");
+                Console.WriteLine("5. Iniciar reparación");
+                Console.WriteLine("6. Registrar acción realizada");
+                Console.WriteLine("7. Usar repuesto");
+                Console.WriteLine("8. Confirmar costo de mano de obra");
+                Console.WriteLine("9. Marcar lista para entregar");
+                Console.WriteLine("10. Entregar");
+                Console.WriteLine("11. Cancelar solicitud");
+                Console.WriteLine("12. Consultar historial");
+                Console.WriteLine("13. Deshacer último cambio de estado");
+                Console.WriteLine("14. Enviar recibida a espera");
                 Console.WriteLine("0. Volver");
 
-                opcion = LeerEntero("Seleccione: ", 0, 2);
+                opcion = LeerEntero("Seleccione: ", 0, 14);
 
                 try
                 {
-                    switch (opcion)
+                    if (opcion == 1)
                     {
-                        case 1:
-                            CrearSolicitud();
-                            break;
-                        case 2:
-                            if (datos.Solicitudes.Count == 0)
-                            {
-                                Console.WriteLine("Sin solicitudes registradas.");
-                            }
+                        CrearSolicitud();
+                    }
+                    else if (opcion == 2)
+                    {
+                        if (datos.Solicitudes.Count == 0)
+                        {
+                            Console.WriteLine("Sin solicitudes.");
+                        }
 
-                            foreach (SolicitudServicio solicitud in datos.Solicitudes)
-                            {
-                                MostrarSolicitud(solicitud);
-                            }
-                            break;
+                        foreach (SolicitudServicio solicitud in datos.Solicitudes)
+                        {
+                            MostrarSolicitud(solicitud);
+                        }
+                    }
+                    else if (opcion >= 3)
+                    {
+                        OperarSolicitud(opcion);
                     }
                 }
                 catch (ArgumentException error)
@@ -2128,6 +2312,139 @@ namespace Proyecto_XelaTech
                 }
 
             } while (opcion != 0);
+        }
+        private void OperarSolicitud(int opcion)
+        {
+            string codigo = LeerTexto("Código de solicitud: ");
+
+            SolicitudServicio solicitud = gestor.BuscarSolicitudPorCodigo(codigo);
+
+            if (solicitud == null)
+            {
+                throw new ArgumentException("La solicitud no existe.");
+            }
+
+            MostrarSolicitud(solicitud);
+
+            if (opcion == 10 || opcion == 11 || opcion == 13)
+            {
+                if (opcion == 10)
+                {
+                    Console.WriteLine("Se registrará la entrega y el total mostrado.");
+                }
+
+                if (opcion == 11)
+                {
+                    Console.WriteLine("Se cancelará. Los repuestos usados no se devolverán automáticamente.");
+                }
+
+                if (opcion == 13)
+                {
+                    List<CambioEstado> cambios = solicitud.ObtenerHistorial();
+
+                    if (cambios.Count == 0)
+                    {
+                        throw new ArgumentException("El historial está vacío.");
+                    }
+
+                    Console.WriteLine("Se intentará volver a: " + cambios[0].Anterior);
+                }
+
+                int confirmar = LeerEntero("¿Confirmar? 1 Sí / 2 No: ", 1, 2);
+
+                if (confirmar == 2)
+                {
+                    return;
+                }
+            }
+
+            switch (opcion)
+            {
+                case 3:
+                    gestor.CambiarEstado(codigo, "EnDiagnostico");
+                    Console.WriteLine(solicitud.Equipo.ObtenerGuiaDiagnostico());
+                    break;
+
+                case 4:
+                    string hallazgos = LeerTexto("Hallazgos y repuestos que se necesitan: ");
+
+                    int minutos = LeerEntero("Tiempo estimado en minutos: ", 1, int.MaxValue);
+
+                    gestor.RegistrarDiagnostico(codigo, hallazgos, minutos);
+                    break;
+
+                case 5:
+                    gestor.CambiarEstado(codigo, "EnReparacion");
+                    break;
+
+                case 6:
+                    gestor.RegistrarAccion(codigo, LeerTexto("Acción realizada: "));
+                    break;
+
+                case 7:
+                    MostrarRepuestos(false);
+
+                    string repuesto = LeerTexto("Código del repuesto: ");
+
+                    int cantidad = LeerEntero("Cantidad utilizada: ", 1, int.MaxValue);
+
+                    gestor.UsarRepuesto(codigo, repuesto, cantidad);
+
+                    MostrarRepuesto(gestor.BuscarRepuestoPorCodigo(repuesto));
+                    break;
+
+                case 8:
+                    decimal importe = LeerDecimal("Mano de obra Q (0 si no se cobra): ", 0);
+
+                    gestor.RegistrarManoObra(codigo, importe);
+                    break;
+
+                case 9:
+                    gestor.CambiarEstado(codigo, "ListaParaEntregar");
+                    break;
+
+                case 10:
+                    int valor = LeerEntero("Calificación 1 a 5, o 0 para omitir: ", 0, 5);
+
+                    int? nota = null;
+
+                    if (valor != 0)
+                    {
+                        nota = valor;
+                    }
+
+                    gestor.Entregar(codigo, nota);
+                    break;
+
+                case 11:
+                    gestor.Cancelar(codigo, LeerTexto("Motivo de cancelación: "));
+                    break;
+
+                case 12:
+                    List<CambioEstado> historial = solicitud.ObtenerHistorial();
+
+                    if (historial.Count == 0)
+                    {
+                        Console.WriteLine("Historial vacío.");
+                    }
+
+                    foreach (CambioEstado cambio in historial)
+                    {
+                        Console.WriteLine(cambio.Describir());
+                    }
+                    return;
+
+                case 13:
+                    gestor.DeshacerEstado(codigo);
+                    break;
+
+                case 14:
+                    gestor.CambiarEstado(codigo, "EnEspera");
+                    break;
+            }
+
+            Console.WriteLine("Operación realizada correctamente.");
+            MostrarSolicitud(solicitud);
         }
 
         private void CrearSolicitud()
@@ -2186,6 +2503,48 @@ namespace Proyecto_XelaTech
             if (solicitud.FechaAsignacion != null)
             {
                 Console.WriteLine("Fecha de asignación: " + solicitud.FechaAsignacion);
+            }
+            if (solicitud.Diagnostico != null)
+            {
+                Console.WriteLine("Diagnóstico: " + solicitud.Diagnostico.Hallazgos);
+
+                Console.WriteLine("Tiempo estimado: " + solicitud.Diagnostico.TiempoEstimadoMin + " minutos");
+
+                foreach (AccionRealizada accion in solicitud.Diagnostico.Acciones)
+                {
+                    Console.WriteLine("Acción " + accion.Codigo + ": " + accion.Descripcion);
+                }
+            }
+
+            foreach (DetalleRepuesto detalle in solicitud.Detalles)
+            {
+                Console.WriteLine(detalle.Repuesto.Codigo + " | cantidad: " + detalle.Cantidad + " | precio Q" + detalle.PrecioAplicado.ToString("F2") + " | subtotal Q" + detalle.CalcularSubtotal().ToString("F2"));
+            }
+
+            Console.WriteLine("Mano de obra: Q" + solicitud.CostoManoObra.ToString("F2"));
+
+            Console.WriteLine("Repuestos: Q" + solicitud.CostoRepuestos.ToString("F2"));
+
+            Console.WriteLine("TOTAL: Q" + solicitud.Total.ToString("F2"));
+
+            if (!solicitud.ManoObraConfirmada)
+            {
+                Console.WriteLine("Mano de obra pendiente de confirmar.");
+            }
+
+            if (solicitud.FechaEntrega != null)
+            {
+                Console.WriteLine("Entrega: " + solicitud.FechaEntrega);
+            }
+
+            if (solicitud.Calificacion != null)
+            {
+                Console.WriteLine("Calificación: " + solicitud.Calificacion);
+            }
+
+            if (solicitud.Estado == "Cancelada")
+            {
+                Console.WriteLine("Motivo: " + solicitud.MotivoCancelacion);
             }
         }
         private void MenuColas()
@@ -2361,6 +2720,14 @@ namespace Proyecto_XelaTech
         private Tecnico tecnicoAsignado;
         private DateTime? fechaAsignacion;
         private int ordenLlegada;
+        private Diagnostico diagnostico;
+        private List<DetalleRepuesto> detalles;
+        private Stack<CambioEstado> historial;
+        private decimal costoManoObra;
+        private bool manoObraConfirmada;
+        private DateTime? fechaEntrega;
+        private int? calificacion;
+        private string motivoCancelacion;
 
         public string Codigo
         {
@@ -2411,6 +2778,60 @@ namespace Proyecto_XelaTech
         {
             get { return ordenLlegada; }
         }
+        public Diagnostico Diagnostico
+        {
+            get { return diagnostico; }
+        }
+
+        public List<DetalleRepuesto> Detalles
+        {
+            get { return new List<DetalleRepuesto>(detalles); }
+        }
+
+        public decimal CostoManoObra
+        {
+            get { return costoManoObra; }
+        }
+
+        public bool ManoObraConfirmada
+        {
+            get { return manoObraConfirmada; }
+        }
+
+        public DateTime? FechaEntrega
+        {
+            get { return fechaEntrega; }
+        }
+
+        public int? Calificacion
+        {
+            get { return calificacion; }
+        }
+
+        public string MotivoCancelacion
+        {
+            get { return motivoCancelacion; }
+        }
+
+        public decimal CostoRepuestos
+        {
+            get
+            {
+                decimal suma = 0;
+
+                foreach (DetalleRepuesto detalle in detalles)
+                {
+                    suma = suma + detalle.CalcularSubtotal();
+                }
+
+                return suma;
+            }
+        }
+
+        public decimal Total
+        {
+            get { return costoManoObra + CostoRepuestos; }
+        }
 
         public SolicitudServicio(string codigo, Cliente cliente, Equipo equipo, string problema, int ordenLlegada) : this(codigo, cliente, equipo, problema, "Normal", ordenLlegada)
         {
@@ -2459,6 +2880,15 @@ namespace Proyecto_XelaTech
             estado = "Recibida";
             tecnicoAsignado = null;
             fechaAsignacion = null;
+            diagnostico = null;
+            detalles = new List<DetalleRepuesto>();
+            historial = new Stack<CambioEstado>();
+
+            costoManoObra = 0;
+            manoObraConfirmada = false;
+            fechaEntrega = null;
+            calificacion = null;
+            motivoCancelacion = null;
         }
 
         public bool EsActiva()
@@ -2466,26 +2896,19 @@ namespace Proyecto_XelaTech
             return estado != "Entregada" && estado != "Cancelada";
         }
 
-        internal void PasarAEspera()
+        internal void PasarAEspera(string codigoCambio)
         {
-            if (estado != "Recibida")
-            {
-                throw new ArgumentException("Solo una solicitud recibida puede entrar en espera.");
-            }
-
-            estado = "EnEspera";
+            CambiarEstado("EnEspera", codigoCambio);
         }
 
-        internal void AsignarTecnico(Tecnico tecnico)
+        internal void AsignarTecnico(Tecnico tecnico, string codigoCambio)
         {
             if (estado != "EnEspera")
             {
                 throw new ArgumentException("La solicitud no está en espera.");
             }
 
-            if (tecnico == null ||
-                !tecnico.Habilitado ||
-                tecnico.Especialidad != equipo.Tipo)
+            if (tecnico == null || !tecnico.Habilitado || tecnico.Especialidad != equipo.Tipo)
             {
                 throw new ArgumentException("El técnico no está habilitado o no es compatible.");
             }
@@ -2502,9 +2925,383 @@ namespace Proyecto_XelaTech
                 throw new ArgumentException("La asignación no puede ser anterior a la recepción.");
             }
 
+            GuardarCambio(codigoCambio, "Asignada");
+
             tecnicoAsignado = tecnico;
             fechaAsignacion = fecha;
-            estado = "Asignada";
+        }
+        private void ExigirActiva()
+        {
+            if (!EsActiva())
+            {
+                throw new ArgumentException("Una solicitud entregada o cancelada no se puede modificar.");
+            }
+        }
+
+        private void GuardarCambio(string codigoCambio, string destino)
+        {
+            CambioEstado cambio = new CambioEstado(codigoCambio, estado, destino, tecnicoAsignado, fechaAsignacion);
+
+            historial.Push(cambio);
+            estado = destino;
+        }
+
+        public List<CambioEstado> ObtenerHistorial()
+        {
+            return new List<CambioEstado>(historial);
+        }
+
+        internal void CambiarEstado(string destino, string codigoCambio)
+        {
+            ExigirActiva();
+
+            bool permitido = false;
+
+            if (estado == "Recibida" && destino == "EnEspera")
+            {
+                permitido = true;
+            }
+            else if (estado == "Asignada" && destino == "EnDiagnostico")
+            {
+                if (tecnicoAsignado == null || !tecnicoAsignado.Habilitado)
+                {
+                    throw new ArgumentException("El técnico debe estar asignado y habilitado.");
+                }
+
+                permitido = true;
+            }
+            else if (estado == "EnDiagnostico" && destino == "EnReparacion")
+            {
+                if (diagnostico == null)
+                {
+                    throw new ArgumentException("Primero registre el diagnóstico y su tiempo estimado.");
+                }
+
+                permitido = true;
+            }
+            else if (estado == "EnReparacion" && destino == "ListaParaEntregar")
+            {
+                if (diagnostico == null || diagnostico.Acciones.Count == 0)
+                {
+                    throw new ArgumentException("Debe registrar al menos una acción realizada.");
+                }
+
+                if (!manoObraConfirmada)
+                {
+                    throw new ArgumentException("Debe confirmar la mano de obra, aunque sea Q0.");
+                }
+
+                permitido = true;
+            }
+
+            if (!permitido)
+            {
+                throw new ArgumentException("No se permite pasar de " + estado + " a " + destino + ".");
+            }
+
+            GuardarCambio(codigoCambio, destino);
+        }
+
+        internal void RegistrarDiagnostico(string codigo,string hallazgos, int minutos)
+        {
+            ExigirActiva();
+
+            if (estado != "EnDiagnostico")
+            {
+                throw new ArgumentException("La solicitud debe estar en diagnóstico.");
+            }
+
+            if (diagnostico == null)
+            {
+                diagnostico = new Diagnostico(codigo, hallazgos, minutos);
+            }
+            else
+            {
+                diagnostico.ActualizarHallazgos(hallazgos, minutos);
+            }
+        }
+
+        internal void RegistrarAccion(string codigo, string descripcion)
+        {
+            ExigirActiva();
+
+            if (estado != "EnReparacion" || diagnostico == null)
+            {
+                throw new ArgumentException("Las acciones se registran durante la reparación.");
+            }
+
+            diagnostico.AgregarAccion(new AccionRealizada(codigo, descripcion));
+        }
+
+        internal void UsarRepuesto(string codigoDetalle, Repuesto repuesto, int cantidad)
+        {
+            ExigirActiva();
+
+            if (estado != "EnReparacion")
+            {
+                throw new ArgumentException("Los repuestos se utilizan durante la reparación.");
+            }
+
+            DetalleRepuesto detalle = new DetalleRepuesto(codigoDetalle, repuesto, cantidad);
+
+            if (detalle.CalcularSubtotal() > decimal.MaxValue - Total)
+            {
+                throw new ArgumentException("El total supera el importe permitido.");
+            }
+            repuesto.Consumir(cantidad);
+            detalles.Add(detalle);
+        }
+
+        internal void RegistrarManoObra(decimal importe)
+        {
+            ExigirActiva();
+
+            if (estado != "EnReparacion")
+            {
+                throw new ArgumentException("La mano de obra se confirma durante la reparación.");
+            }
+
+            if (importe < 0 || importe > decimal.MaxValue - CostoRepuestos)
+            {
+                throw new ArgumentException("El importe de mano de obra no es válido.");
+            }
+
+            costoManoObra = importe;
+            manoObraConfirmada = true;
+        }
+
+        internal void Entregar(string codigoCambio, int? nota)
+        {
+            ExigirActiva();
+
+            if (estado != "ListaParaEntregar" ||tecnicoAsignado == null || fechaAsignacion == null)
+            {
+                throw new ArgumentException("La solicitud debe estar lista para entregar.");
+            }
+
+            if (nota != null && (nota < 1 || nota > 5))
+            {
+                throw new ArgumentException("La calificación debe estar entre 1 y 5, o no registrarse.");
+            }
+
+            DateTime fecha = DateTime.Now;
+
+            if (fecha < fechaAsignacion.Value)
+            {
+                throw new ArgumentException("La entrega no puede ser anterior a la asignación.");
+            }
+
+            GuardarCambio(codigoCambio, "Entregada");
+
+            fechaEntrega = fecha;
+            calificacion = nota;
+
+            if (nota != null)
+            {
+                tecnicoAsignado.RegistrarCalificacion(nota.Value);
+            }
+        }
+
+        internal void Cancelar(string codigoCambio, string motivo)
+        {
+            ExigirActiva();
+
+            if (string.IsNullOrWhiteSpace(motivo))
+            {
+                throw new ArgumentException("Debe indicar el motivo de cancelación.");
+            }
+
+            GuardarCambio(codigoCambio, "Cancelada");
+            motivoCancelacion = motivo.Trim();
+        }
+
+        internal void DeshacerEstado()
+        {
+            ExigirActiva();
+
+            if (historial.Count == 0)
+            {
+                throw new ArgumentException("El historial está vacío.");
+            }
+
+            CambioEstado cambio = historial.Peek();
+
+            if (cambio.Nuevo != estado)
+            {
+                throw new ArgumentException("El historial no coincide con el estado actual.");
+            }
+
+            if (estado == "EnReparacion" && (detalles.Count > 0 ||(diagnostico != null && diagnostico.Acciones.Count > 0)))
+            {
+                throw new ArgumentException("No puede volver a diagnóstico si ya hay acciones o repuestos usados.");
+            }
+
+            if (estado == "EnDiagnostico" && diagnostico != null)
+            {
+                throw new ArgumentException("No puede volver a asignada si ya guardó un diagnóstico.");
+            }
+
+            estado = cambio.Anterior;
+            tecnicoAsignado = cambio.TecnicoAnterior;
+            fechaAsignacion = cambio.FechaAsignacionAnterior;
+
+            historial.Pop();
+        }
+    }
+    public class AccionRealizada
+    {
+        private string codigo;
+        private string descripcion;
+        private DateTime fecha;
+
+        public string Codigo { get { return codigo; } }
+        public string Descripcion { get { return descripcion; } }
+        public DateTime Fecha { get { return fecha; } }
+
+        public AccionRealizada(string codigo, string descripcion)
+        {
+            if (string.IsNullOrWhiteSpace(codigo) || string.IsNullOrWhiteSpace(descripcion))
+            {
+                throw new ArgumentException("La acción necesita código y descripción.");
+            }
+
+            this.codigo = codigo.Trim();
+            this.descripcion = descripcion.Trim();
+            fecha = DateTime.Now;
+        }
+    }
+
+    public class Diagnostico
+    {
+        private string codigo;
+        private DateTime fecha;
+        private string hallazgos;
+        private int tiempoEstimadoMin;
+        private List<AccionRealizada> acciones;
+
+        public string Codigo { get { return codigo; } }
+        public DateTime Fecha { get { return fecha; } }
+        public string Hallazgos { get { return hallazgos; } }
+        public int TiempoEstimadoMin { get { return tiempoEstimadoMin; } }
+
+        public List<AccionRealizada> Acciones
+        {
+            get { return new List<AccionRealizada>(acciones); }
+        }
+
+        public Diagnostico(string codigo, string hallazgos, int minutos)
+        {
+            if (string.IsNullOrWhiteSpace(codigo))
+            {
+                throw new ArgumentException("El diagnóstico necesita un código.");
+            }
+
+            this.codigo = codigo.Trim();
+            ActualizarHallazgos(hallazgos, minutos);
+
+            fecha = DateTime.Now;
+            acciones = new List<AccionRealizada>();
+        }
+
+        internal void ActualizarHallazgos(string texto, int minutos)
+        {
+            if (string.IsNullOrWhiteSpace(texto) || minutos <= 0)
+            {
+                throw new ArgumentException("Escriba hallazgos y un tiempo mayor que cero.");
+            }
+
+            hallazgos = texto.Trim();
+            tiempoEstimadoMin = minutos;
+        }
+
+        internal void AgregarAccion(AccionRealizada accion)
+        {
+            if (accion == null)
+            {
+                throw new ArgumentException("La acción es obligatoria.");
+            }
+
+            acciones.Add(accion);
+        }
+    }
+
+    public class DetalleRepuesto
+    {
+        private string codigo;
+        private Repuesto repuesto;
+        private int cantidad;
+        private decimal precioAplicado;
+        private DateTime fechaUso;
+
+        public string Codigo { get { return codigo; } }
+        public Repuesto Repuesto { get { return repuesto; } }
+        public int Cantidad { get { return cantidad; } }
+        public decimal PrecioAplicado { get { return precioAplicado; } }
+        public DateTime FechaUso { get { return fechaUso; } }
+
+        public DetalleRepuesto(string codigo, Repuesto repuesto, int cantidad)
+        {
+            if (string.IsNullOrWhiteSpace(codigo) || repuesto == null || cantidad <= 0)
+            {
+                throw new ArgumentException("El detalle necesita código, repuesto y cantidad positiva.");
+            }
+
+            if (repuesto.PrecioVenta > decimal.MaxValue / cantidad)
+            {
+                throw new ArgumentException("El subtotal supera el importe permitido.");
+            }
+
+            this.codigo = codigo.Trim();
+            this.repuesto = repuesto;
+            this.cantidad = cantidad;
+            precioAplicado = repuesto.PrecioVenta;
+            fechaUso = DateTime.Now;
+        }
+
+        public decimal CalcularSubtotal()
+        {
+            return cantidad * precioAplicado;
+        }
+    }
+
+    public class CambioEstado
+    {
+        private string codigo;
+        private string anterior;
+        private string nuevo;
+        private DateTime fecha;
+        private Tecnico tecnicoAnterior;
+        private DateTime? fechaAsignacionAnterior;
+
+        public string Codigo { get { return codigo; } }
+        public string Anterior { get { return anterior; } }
+        public string Nuevo { get { return nuevo; } }
+        public DateTime Fecha { get { return fecha; } }
+        public Tecnico TecnicoAnterior { get { return tecnicoAnterior; } }
+
+        public DateTime? FechaAsignacionAnterior
+        {
+            get { return fechaAsignacionAnterior; }
+        }
+
+        public CambioEstado(string codigo, string anterior, string nuevo, Tecnico tecnicoAnterior, DateTime? fechaAnterior)
+        {
+            if (string.IsNullOrWhiteSpace(codigo) || string.IsNullOrWhiteSpace(anterior) || string.IsNullOrWhiteSpace(nuevo))
+            {
+                throw new ArgumentException("El cambio necesita código y estados.");
+            }
+
+            this.codigo = codigo.Trim();
+            this.anterior = anterior;
+            this.nuevo = nuevo;
+            this.tecnicoAnterior = tecnicoAnterior;
+            fechaAsignacionAnterior = fechaAnterior;
+            fecha = DateTime.Now;
+        }
+
+        public string Describir()
+        {
+            return Codigo + " | " + Fecha + " | " + Anterior + " -> " + Nuevo;
         }
     }
     internal class Program
